@@ -24,16 +24,12 @@
  * limitations under the License.
  */
 #include <tesseract_motion_planners/descartes/descartes_collision.h>
-
-#include <tesseract_kinematics/core/joint_group.h>
-#include <tesseract_collision/core/discrete_contact_manager.h>
-#include <tesseract_environment/environment.h>
 #include <tesseract_environment/utils.h>
 
 namespace tesseract_planning
 {
 DescartesCollision::DescartesCollision(const tesseract_environment::Environment& collision_env,
-                                       std::shared_ptr<const tesseract_kinematics::JointGroup> manip,
+                                       tesseract_kinematics::JointGroup::ConstPtr manip,
                                        tesseract_collision::CollisionCheckConfig collision_check_config,
                                        bool debug)
   : manip_(std::move(manip))
@@ -56,7 +52,7 @@ DescartesCollision::DescartesCollision(const DescartesCollision& collision_inter
   contact_manager_->applyContactManagerConfig(collision_check_config_.contact_manager_config);
 }
 
-tesseract_collision::ContactResultMap DescartesCollision::validate(const Eigen::Ref<const Eigen::VectorXd>& pos)
+bool DescartesCollision::validate(const Eigen::Ref<const Eigen::VectorXd>& pos)
 {
   // Happens in two phases:
   // 1. Compute the transform of all objects
@@ -67,7 +63,7 @@ tesseract_collision::ContactResultMap DescartesCollision::validate(const Eigen::
 
   tesseract_collision::ContactResultMap results;
   tesseract_environment::checkTrajectoryState(results, *contact_manager_, state, config);
-  return results;
+  return results.empty();
 }
 
 double DescartesCollision::distance(const Eigen::Ref<const Eigen::VectorXd>& pos)

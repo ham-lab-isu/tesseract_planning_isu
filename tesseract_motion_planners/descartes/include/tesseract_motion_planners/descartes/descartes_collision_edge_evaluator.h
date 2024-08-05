@@ -30,13 +30,11 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <vector>
 #include <descartes_light/core/edge_evaluator.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
-#include <tesseract_common/eigen_types.h>
-#include <tesseract_collision/core/fwd.h>
+#include <tesseract_environment/environment.h>
+#include <tesseract_collision/core/discrete_contact_manager.h>
+#include <tesseract_collision/core/continuous_contact_manager.h>
 #include <tesseract_collision/core/types.h>
-#include <tesseract_kinematics/core/fwd.h>
-#include <tesseract_environment/fwd.h>
+TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 namespace tesseract_planning
 {
@@ -45,7 +43,7 @@ class DescartesCollisionEdgeEvaluator : public descartes_light::EdgeEvaluator<Fl
 {
 public:
   DescartesCollisionEdgeEvaluator(const tesseract_environment::Environment& collision_env,
-                                  std::shared_ptr<const tesseract_kinematics::JointGroup> manip,
+                                  tesseract_kinematics::JointGroup::ConstPtr manip,
                                   tesseract_collision::CollisionCheckConfig config,
                                   bool allow_collision = false,
                                   bool debug = false);
@@ -55,13 +53,13 @@ public:
 
 protected:
   /** @brief The tesseract state solver */
-  std::shared_ptr<const tesseract_kinematics::JointGroup> manip_;
+  tesseract_kinematics::JointGroup::ConstPtr manip_;
   /** @brief A vector of active link names */
   std::vector<std::string> active_link_names_;
   /** @brief The discrete contact manager */
-  std::shared_ptr<tesseract_collision::DiscreteContactManager> discrete_contact_manager_;
+  tesseract_collision::DiscreteContactManager::Ptr discrete_contact_manager_;
   /** @brief The discrete contact manager */
-  std::shared_ptr<tesseract_collision::ContinuousContactManager> continuous_contact_manager_;
+  tesseract_collision::ContinuousContactManager::Ptr continuous_contact_manager_;
   /** @brief The minimum allowed collision distance */
   tesseract_collision::CollisionCheckConfig collision_check_config_;
   /** @brief If true and no valid edges are found it will return the one with the lowest cost */
@@ -78,12 +76,10 @@ protected:
   mutable std::mutex mutex_;
 
   /** @brief The continuous contact manager cache */
-  mutable std::map<unsigned long int, std::shared_ptr<tesseract_collision::ContinuousContactManager>>
-      continuous_contact_managers_;
+  mutable std::map<unsigned long int, tesseract_collision::ContinuousContactManager::Ptr> continuous_contact_managers_;
 
   /** @brief The discrete contact manager cache */
-  mutable std::map<unsigned long int, std::shared_ptr<tesseract_collision::DiscreteContactManager>>
-      discrete_contact_managers_;
+  mutable std::map<unsigned long int, tesseract_collision::DiscreteContactManager::Ptr> discrete_contact_managers_;
 
   /**
    * @brief Perform a continuous collision check between two states

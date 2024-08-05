@@ -27,30 +27,32 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-#include <yaml-cpp/yaml.h>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/nodes/sync_task.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
 
 namespace tesseract_planning
 {
-SyncTask::SyncTask(std::string name) : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, false) {}
+SyncTask::SyncTask(std::string name) : TaskComposerTask(std::move(name), false) {}
 SyncTask::SyncTask(std::string name, const YAML::Node& config, const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, config)
+  : TaskComposerTask(std::move(name), config)
 {
   if (conditional_)
     throw std::runtime_error("SyncTask, config is_conditional should not be true");
+
+  if (!input_keys_.empty())
+    throw std::runtime_error("SyncTask, config does not support 'inputs' entry");
+
+  if (!output_keys_.empty())
+    throw std::runtime_error("SyncTask, config does not support 'outputs' entry");
 }
-std::unique_ptr<TaskComposerNodeInfo> SyncTask::runImpl(TaskComposerContext& /*context*/,
-                                                        OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr SyncTask::runImpl(TaskComposerContext& /*context*/,
+                                             OptionalTaskComposerExecutor /*executor*/) const
 {
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->color = "green";
+  info->message = "Successful";
   info->return_value = 1;
-  info->status_code = 1;
-  info->status_message = "Successful";
   return info;
 }
 
@@ -65,5 +67,6 @@ void SyncTask::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::SyncTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::SyncTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::SyncTask)

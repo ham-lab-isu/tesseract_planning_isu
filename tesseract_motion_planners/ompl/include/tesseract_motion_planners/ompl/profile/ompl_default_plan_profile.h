@@ -29,27 +29,16 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <vector>
-#include <memory>
 #include <Eigen/Geometry>
+#include <Eigen/Core>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+#include <tesseract_motion_planners/ompl/utils.h>
+#include <tesseract_motion_planners/ompl/ompl_planner_configurator.h>
 #include <tesseract_motion_planners/ompl/profile/ompl_profile.h>
-#include <tesseract_motion_planners/ompl/ompl_problem.h>
-
-#include <tesseract_collision/core/types.h>
-
-#include <tesseract_command_language/fwd.h>
-#include <tesseract_common/fwd.h>
-
-namespace ompl::base
-{
-class StateValidityChecker;
-using StateValidityCheckerPtr = std::shared_ptr<StateValidityChecker>;
-}  // namespace ompl::base
 
 namespace tesseract_planning
 {
-struct OMPLPlannerConfigurator;
 /**
  * @brief OMPL does not support the concept of multi waypoint planning like descartes and trajopt. Because of this
  * every plan instruction will be its a seperate ompl motion plan and therefore planning information is relevent
@@ -61,7 +50,7 @@ public:
   using Ptr = std::shared_ptr<OMPLDefaultPlanProfile>;
   using ConstPtr = std::shared_ptr<const OMPLDefaultPlanProfile>;
 
-  OMPLDefaultPlanProfile();
+  OMPLDefaultPlanProfile() = default;
   ~OMPLDefaultPlanProfile() override = default;
   OMPLDefaultPlanProfile(const OMPLDefaultPlanProfile&) = default;
   OMPLDefaultPlanProfile& operator=(const OMPLDefaultPlanProfile&) = default;
@@ -104,7 +93,8 @@ public:
    *
    * This will create a new thread for each planner configurator provided. T
    */
-  std::vector<std::shared_ptr<const OMPLPlannerConfigurator>> planners;
+  std::vector<OMPLPlannerConfigurator::ConstPtr> planners = { std::make_shared<const RRTConnectConfigurator>(),
+                                                              std::make_shared<const RRTConnectConfigurator>() };
 
   /** @brief The collision check configuration */
   tesseract_collision::CollisionCheckConfig collision_check_config;

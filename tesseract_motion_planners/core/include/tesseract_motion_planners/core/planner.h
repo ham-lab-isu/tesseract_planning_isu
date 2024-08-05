@@ -26,20 +26,10 @@
 #ifndef TESSERACT_MOTION_PLANNERS_PLANNER_H
 #define TESSERACT_MOTION_PLANNERS_PLANNER_H
 
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <Eigen/Core>
-#include <memory>
-#include <vector>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
-#include <tesseract_command_language/fwd.h>
+#include <tesseract_motion_planners/core/types.h>
 
 namespace tesseract_planning
 {
-struct PlannerRequest;
-struct PlannerResponse;
-
 class MotionPlanner
 {
 public:
@@ -77,13 +67,10 @@ public:
   virtual void clear() = 0;
 
   /** @brief Clone the motion planner */
-  virtual std::unique_ptr<MotionPlanner> clone() const = 0;
+  virtual MotionPlanner::Ptr clone() const = 0;
 
   /** @brief Check planning request */
   static bool checkRequest(const PlannerRequest& request);
-
-  /** @brief Check planning request and give reason for failure */
-  static bool checkRequest(const PlannerRequest& request, std::string& reason);
 
   /** @brief Assign a solution to the move instruction */
   static void assignSolution(MoveInstructionPoly& mi,

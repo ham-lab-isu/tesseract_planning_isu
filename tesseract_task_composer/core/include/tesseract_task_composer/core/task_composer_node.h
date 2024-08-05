@@ -30,30 +30,14 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <memory>
 #include <vector>
-#include <map>
-#include <optional>
 #include <boost/uuid/uuid.hpp>
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_common/fwd.h>
-
-#include <tesseract_task_composer/core/task_composer_keys.h>
-#include <tesseract_task_composer/core/task_composer_node_ports.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-
-namespace YAML
-{
-class Node;
-}
+#include <tesseract_task_composer/core/task_composer_context.h>
+#include <tesseract_task_composer/core/task_composer_data_storage.h>
 
 namespace tesseract_planning
 {
-class TaskComposerDataStorage;
-class TaskComposerContext;
-class TaskComposerExecutor;
-
 enum class TaskComposerNodeType
 {
   NODE,
@@ -71,36 +55,21 @@ public:
   using UPtr = std::unique_ptr<TaskComposerNode>;
   using ConstUPtr = std::unique_ptr<const TaskComposerNode>;
 
-  /** @brief Most task will not require a executor so making it optional */
-  using OptionalTaskComposerExecutor = std::optional<std::reference_wrapper<TaskComposerExecutor>>;
-
   TaskComposerNode(std::string name = "TaskComposerNode",
                    TaskComposerNodeType type = TaskComposerNodeType::NODE,
-                   TaskComposerNodePorts ports = TaskComposerNodePorts(),
                    bool conditional = false);
-  explicit TaskComposerNode(std::string name,
-                            TaskComposerNodeType type,
-                            TaskComposerNodePorts ports,
-                            const YAML::Node& config);
+  explicit TaskComposerNode(std::string name, TaskComposerNodeType type, const YAML::Node& config);
   virtual ~TaskComposerNode() = default;
   TaskComposerNode(const TaskComposerNode&) = delete;
   TaskComposerNode& operator=(const TaskComposerNode&) = delete;
   TaskComposerNode(TaskComposerNode&&) = delete;
   TaskComposerNode& operator=(TaskComposerNode&&) = delete;
 
-  int run(TaskComposerContext& context, OptionalTaskComposerExecutor executor = std::nullopt) const;
-
   /** @brief Set the name of the node */
   void setName(const std::string& name);
 
   /** @brief The name of the node */
   const std::string& getName() const;
-
-  /** @brief Set the namespace of the node */
-  void setNamespace(const std::string& ns);
-
-  /** @brief The namespace of the node */
-  const std::string& getNamespace() const;
 
   /** @brief The node type TASK, GRAPH, etc */
   TaskComposerNodeType getType() const;
@@ -123,9 +92,6 @@ public:
    */
   bool isConditional() const;
 
-  /** @brief This will validate that all required ports exist and that no extra ports exist */
-  void validatePorts() const;
-
   /** @brief IDs of nodes (i.e. node) that should run after this node */
   const std::vector<boost::uuids::uuid>& getOutboundEdges() const;
 
@@ -133,19 +99,16 @@ public:
   const std::vector<boost::uuids::uuid>& getInboundEdges() const;
 
   /** @brief Set the nodes input keys */
-  void setInputKeys(const TaskComposerKeys& input_keys);
+  void setInputKeys(const std::vector<std::string>& input_keys);
 
   /** @brief The nodes input keys */
-  const TaskComposerKeys& getInputKeys() const;
+  const std::vector<std::string>& getInputKeys() const;
 
   /** @brief Set the nodes input keys */
-  void setOutputKeys(const TaskComposerKeys& output_keys);
+  void setOutputKeys(const std::vector<std::string>& output_keys);
 
   /** @brief The nodes output keys */
-  const TaskComposerKeys& getOutputKeys() const;
-
-  /** @brief Get the ports associated with the node */
-  TaskComposerNodePorts getPorts() const;
+  const std::vector<std::string>& getOutputKeys() const;
 
   /** @brief Rename input keys */
   virtual void renameInputKeys(const std::map<std::string, std::string>& input_keys);
@@ -160,10 +123,9 @@ public:
    * @brief dump the task to dot
    * @brief Return additional subgraphs which should get appended if needed
    */
-  virtual std::string
-  dump(std::ostream& os,
-       const TaskComposerNode* parent = nullptr,
-       const std::map<boost::uuids::uuid, std::unique_ptr<TaskComposerNodeInfo>>& results_map = {}) const;
+  virtual std::string dump(std::ostream& os,
+                           const TaskComposerNode* parent = nullptr,
+                           const std::map<boost::uuids::uuid, TaskComposerNodeInfo::UPtr>& results_map = {}) const;
 
   bool operator==(const TaskComposerNode& rhs) const;
   bool operator!=(const TaskComposerNode& rhs) const;
@@ -177,14 +139,8 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
 
-  virtual std::unique_ptr<TaskComposerNodeInfo> runImpl(TaskComposerContext& context,
-                                                        OptionalTaskComposerExecutor executor = std::nullopt) const = 0;
-
   /** @brief The name of the task */
   std::string name_;
-
-  /** @brief The namespace of the task */
-  std::string ns_;
 
   /** @brief The node type */
   TaskComposerNodeType type_;
@@ -208,45 +164,21 @@ protected:
   std::vector<boost::uuids::uuid> inbound_edges_;
 
   /** @brief The nodes input keys */
-  TaskComposerKeys input_keys_;
+  std::vector<std::string> input_keys_;
 
   /** @brief The nodes output keys */
-  TaskComposerKeys output_keys_;
+  std::vector<std::string> output_keys_;
 
   /** @brief Indicate if node is conditional */
   bool conditional_{ false };
 
-  /** @brief The nodes ports definition */
-  TaskComposerNodePorts ports_;
-
-  /** @brief Indicate if task triggers abort */
-  bool trigger_abort_{ false };
-
   /** @brief This will create a UUID string with no hyphens used when creating dot graph */
   static std::string toString(const boost::uuids::uuid& u, const std::string& prefix = "");
-
-  /**
-   * @brief A utility function for extracting data from data storage
-   * @param data_storage The data storage to retrieve data from
-   * @param port The port associated with the key
-   * @param required Indicate if data is required
-   * @return The data stored under the name, if not found and required an exception will be thrown other null
-   */
-  template <typename T = tesseract_common::AnyPoly>
-  T getData(const TaskComposerDataStorage& data_storage, const std::string& port, bool required = true) const;
-
-  /**
-   * @brief A utility function for setting data in data storage
-   * @param port The port associated with the key
-   * @param data_storage The data storage to assign data to
-   * @param data The data to store
-   */
-  void setData(TaskComposerDataStorage& data_storage, const std::string& port, tesseract_common::AnyPoly data) const;
-  void setData(TaskComposerDataStorage& data_storage,
-               const std::string& port,
-               const std::vector<tesseract_common::AnyPoly>& data) const;
 };
 
 }  // namespace tesseract_planning
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::TaskComposerNode)
+
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::TaskComposerNode, "TaskComposerNode")
+
 #endif  // TESSERACT_TASK_COMPOSER_TASK_COMPOSER_NODE_H

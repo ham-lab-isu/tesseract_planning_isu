@@ -32,11 +32,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/descartes/descartes_collision_edge_evaluator.h>
-
-#include <tesseract_kinematics/core/joint_group.h>
-#include <tesseract_collision/core/discrete_contact_manager.h>
-#include <tesseract_collision/core/continuous_contact_manager.h>
-#include <tesseract_environment/environment.h>
 #include <tesseract_environment/utils.h>
 
 namespace tesseract_planning
@@ -44,7 +39,7 @@ namespace tesseract_planning
 template <typename FloatType>
 DescartesCollisionEdgeEvaluator<FloatType>::DescartesCollisionEdgeEvaluator(
     const tesseract_environment::Environment& collision_env,
-    std::shared_ptr<const tesseract_kinematics::JointGroup> manip,
+    tesseract_kinematics::JointGroup::ConstPtr manip,
     tesseract_collision::CollisionCheckConfig config,
     bool allow_collision,
     bool debug)
@@ -59,7 +54,7 @@ DescartesCollisionEdgeEvaluator<FloatType>::DescartesCollisionEdgeEvaluator(
   if (discrete_contact_manager_ != nullptr)
   {
     discrete_contact_manager_->setActiveCollisionObjects(active_link_names_);
-    discrete_contact_manager_->applyContactManagerConfig(collision_check_config_.contact_manager_config);
+    discrete_contact_manager_->applyContactManagerConfig(config.contact_manager_config);
   }
   else if (collision_check_config_.type == tesseract_collision::CollisionEvaluatorType::DISCRETE ||
            collision_check_config_.type == tesseract_collision::CollisionEvaluatorType::LVS_DISCRETE)
@@ -71,7 +66,7 @@ DescartesCollisionEdgeEvaluator<FloatType>::DescartesCollisionEdgeEvaluator(
   if (continuous_contact_manager_ != nullptr)
   {
     continuous_contact_manager_->setActiveCollisionObjects(active_link_names_);
-    continuous_contact_manager_->applyContactManagerConfig(collision_check_config_.contact_manager_config);
+    continuous_contact_manager_->applyContactManagerConfig(config.contact_manager_config);
   }
   else if (collision_check_config_.type == tesseract_collision::CollisionEvaluatorType::CONTINUOUS ||
            collision_check_config_.type == tesseract_collision::CollisionEvaluatorType::LVS_CONTINUOUS)

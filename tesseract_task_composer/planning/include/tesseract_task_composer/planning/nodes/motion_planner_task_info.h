@@ -29,16 +29,15 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+#include <tesseract_task_composer/core/task_composer_task.h>
 #include <tesseract_task_composer/core/task_composer_node_info.h>
 
-#include <tesseract_environment/fwd.h>
+#include <tesseract_environment/environment.h>
 
 namespace tesseract_planning
 {
-class TaskComposerTask;
 class MotionPlannerTaskInfo : public TaskComposerNodeInfo
 {
 public:
@@ -50,9 +49,9 @@ public:
   MotionPlannerTaskInfo() = default;
   MotionPlannerTaskInfo(const TaskComposerTask& task);
 
-  std::shared_ptr<const tesseract_environment::Environment> env;
+  tesseract_environment::Environment::ConstPtr env;
 
-  std::unique_ptr<TaskComposerNodeInfo> clone() const override;
+  TaskComposerNodeInfo::UPtr clone() const override;
 
   bool operator==(const MotionPlannerTaskInfo& rhs) const;
   bool operator!=(const MotionPlannerTaskInfo& rhs) const;
@@ -65,5 +64,6 @@ private:
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::MotionPlannerTaskInfo)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::MotionPlannerTaskInfo, "MotionPlannerTaskInfo")
 #endif  // TESSERACT_TASK_COMPOSER_MOTION_PLANNER_TASK_INFO_H

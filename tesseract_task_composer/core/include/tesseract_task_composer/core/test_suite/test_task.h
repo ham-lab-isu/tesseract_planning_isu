@@ -28,8 +28,6 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
-#include <tesseract_common/fwd.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
@@ -41,21 +39,9 @@ class TaskComposerPluginFactory;
 
 namespace tesseract_planning::test_suite
 {
-class DummyTaskComposerNode : public TaskComposerNode
-{
-  using TaskComposerNode::TaskComposerNode;
-
-  std::unique_ptr<TaskComposerNodeInfo>
-  runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor /*executor*/ = std::nullopt) const override final;
-};
-
 class TestTask : public TaskComposerTask
 {
 public:
-  // Requried
-  static const std::string INOUT_PORT1_PORT;
-  static const std::string INOUT_PORT2_PORT;
-
   TestTask();
   explicit TestTask(std::string name, bool conditional);
   explicit TestTask(std::string name, const YAML::Node& config, const TaskComposerPluginFactory& plugin_factory);
@@ -75,13 +61,12 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int /*version*/);  // NOLINT
 
-  static TaskComposerNodePorts ports();
-
-  std::unique_ptr<TaskComposerNodeInfo>
-  runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor /*executor*/ = std::nullopt) const override final;
+  TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                     OptionalTaskComposerExecutor /*executor*/ = std::nullopt) const override final;
 };
 }  // namespace tesseract_planning::test_suite
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::test_suite::TestTask)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::test_suite::TestTask, "TestTask")
 
 #endif  // TESSERACT_TASK_COMPOSER_TEST_TASK_H

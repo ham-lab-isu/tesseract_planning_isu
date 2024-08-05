@@ -33,71 +33,47 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/unordered_map.hpp>
 #include <mutex>
 #include <console_bridge/console.h>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_data_storage.h>
 namespace tesseract_planning
 {
-// NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
 TaskComposerDataStorage::TaskComposerDataStorage(const TaskComposerDataStorage& other)
 {
   std::unique_lock lhs_lock(mutex_, std::defer_lock);
   std::shared_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  name_ = other.name_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  data_ = other.data_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  data_ = other.data_;
 }
-
-// NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
 TaskComposerDataStorage& TaskComposerDataStorage::operator=(const TaskComposerDataStorage& other)
 {
   std::unique_lock lhs_lock(mutex_, std::defer_lock);
   std::shared_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  name_ = other.name_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  data_ = other.data_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  data_ = other.data_;
   return *this;
 }
-
-// NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
 TaskComposerDataStorage::TaskComposerDataStorage(TaskComposerDataStorage&& other) noexcept
 {
   std::unique_lock lhs_lock(mutex_, std::defer_lock);
   std::unique_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  name_ = std::move(other.name_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  data_ = std::move(other.data_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  data_ = std::move(other.data_);
 }
-
-// NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
 TaskComposerDataStorage& TaskComposerDataStorage::operator=(TaskComposerDataStorage&& other) noexcept
 {
   std::unique_lock lhs_lock(mutex_, std::defer_lock);
   std::unique_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  name_ = std::move(other.name_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  data_ = std::move(other.data_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  data_ = std::move(other.data_);
   return *this;
 }
 
-std::string TaskComposerDataStorage::getName() const
-{
-  std::shared_lock lock(mutex_);
-  return name_;
-}
-
-void TaskComposerDataStorage::setName(const std::string& name)
-{
-  std::unique_lock lock(mutex_);
-  name_ = name;
-}
-
-bool TaskComposerDataStorage::hasKey(const std::string& key) const
+bool TaskComposerDataStorage::hasKey(const std::string& key)
 {
   std::shared_lock lock(mutex_);
   return (data_.find(key) != data_.end());
@@ -178,7 +154,10 @@ bool TaskComposerDataStorage::operator==(const TaskComposerDataStorage& rhs) con
   std::shared_lock lhs_lock(mutex_, std::defer_lock);
   std::shared_lock rhs_lock(rhs.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
-  return ((data_ == rhs.data_) && (name_ == rhs.name_));
+
+  bool equal = true;
+  equal &= data_ == rhs.data_;
+  return equal;
 }
 
 bool TaskComposerDataStorage::operator!=(const TaskComposerDataStorage& rhs) const { return !operator==(rhs); }
@@ -187,10 +166,11 @@ template <class Archive>
 void TaskComposerDataStorage::serialize(Archive& ar, const unsigned int /*version*/)
 {
   std::unique_lock lock(mutex_);
-  ar& boost::serialization::make_nvp("name", name_);
   ar& boost::serialization::make_nvp("data", data_);
 }
 
 }  // namespace tesseract_planning
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerDataStorage)
+
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerDataStorage)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerDataStorage)

@@ -32,15 +32,10 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <shared_mutex>
 #include <map>
 #include <chrono>
-#include <functional>
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
 #include <boost/uuid/uuid.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_common/any_poly.h>
-
-#include <tesseract_task_composer/core/task_composer_keys.h>
 
 namespace tesseract_planning
 {
@@ -63,11 +58,8 @@ public:
   TaskComposerNodeInfo(TaskComposerNodeInfo&&) = default;
   TaskComposerNodeInfo& operator=(TaskComposerNodeInfo&&) = default;
 
-  /** @brief The name of the task */
+  /** @brief The name */
   std::string name;
-
-  /** @brief The namespace of the task */
-  std::string ns;
 
   /** @brief The task uuid */
   boost::uuids::uuid uuid{};
@@ -85,19 +77,16 @@ public:
   std::vector<boost::uuids::uuid> outbound_edges;
 
   /** @brief The input keys */
-  TaskComposerKeys input_keys;
+  std::vector<std::string> input_keys;
 
   /** @brief The output keys */
-  TaskComposerKeys output_keys;
+  std::vector<std::string> output_keys;
 
   /** @brief Value returned from the Task on completion */
   int return_value{ -1 };
 
-  /** @brief Status code */
-  int status_code{ 0 };
-
   /** @brief Status message */
-  std::string status_message;
+  std::string message;
 
   /** @brief The start time */
   std::chrono::system_clock::time_point start_time{ std::chrono::system_clock::now() };
@@ -135,7 +124,8 @@ public:
 private:
   friend struct tesseract_common::Serialization;
   friend class boost::serialization::access;
-  friend class TaskComposerNode;
+  friend class TaskComposerTask;
+  friend class TaskComposerPipeline;
 
   /** @brief Indicate if task was not ran because abort flag was enabled */
   bool aborted_{ false };
@@ -145,9 +135,8 @@ private:
 };
 
 /** @brief A threadsafe container for TaskComposerNodeInfo */
-class TaskComposerNodeInfoContainer
+struct TaskComposerNodeInfoContainer
 {
-public:
   using Ptr = std::shared_ptr<TaskComposerNodeInfoContainer>;
   using ConstPtr = std::shared_ptr<const TaskComposerNodeInfoContainer>;
   using UPtr = std::unique_ptr<TaskComposerNodeInfoContainer>;
@@ -173,15 +162,6 @@ public:
    */
   TaskComposerNodeInfo::UPtr getInfo(const boost::uuids::uuid& key) const;
 
-  /**
-   * @brief Get task info by name
-   * @param name The name of task info to search
-   * @param ns The namespace to search under. If empty all namespace's are include
-   * @return A list of task infos with the following name.
-   */
-  std::vector<TaskComposerNodeInfo::UPtr>
-  find(const std::function<bool(const TaskComposerNodeInfo& node_info)>& search_fn) const;
-
   /** @brief Get a copy of the task_info_map_ in case it gets resized*/
   std::map<boost::uuids::uuid, TaskComposerNodeInfo::UPtr> getInfoMap() const;
 
@@ -206,9 +186,6 @@ public:
   /** @brief Clear the contents */
   void clear();
 
-  /** @brief Prune data from node infos to save space */
-  void prune(const std::function<void(TaskComposerNodeInfo&)>& prune_fn);
-
   bool operator==(const TaskComposerNodeInfoContainer& rhs) const;
   bool operator!=(const TaskComposerNodeInfoContainer& rhs) const;
 
@@ -226,6 +203,9 @@ private:
                      const boost::uuids::uuid& uuid) const;
 };
 }  // namespace tesseract_planning
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::TaskComposerNodeInfo)
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::TaskComposerNodeInfoContainer)
+
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::TaskComposerNodeInfo, "TaskComposerNodeInfo")
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::TaskComposerNodeInfoContainer, "TaskComposerNodeInfoContainer")
+
 #endif  // TESSERACT_TASK_COMPOSER_TASK_COMPOSER_NODE_INFO_H

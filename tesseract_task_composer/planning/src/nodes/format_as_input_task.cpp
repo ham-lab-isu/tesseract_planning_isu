@@ -31,87 +31,67 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-
-#include <tesseract_common/joint_state.h>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_task_composer/planning/nodes/format_as_input_task.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-
 #include <tesseract_command_language/composite_instruction.h>
-#include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/poly/state_waypoint_poly.h>
-#include <tesseract_command_language/poly/cartesian_waypoint_poly.h>
-#include <tesseract_command_language/poly/joint_waypoint_poly.h>
+#include <tesseract_task_composer/planning/nodes/format_as_input_task.h>
 
 namespace tesseract_planning
 {
-// Requried
-const std::string FormatAsInputTask::INPUT_PRE_PLANNING_PROGRAM_PORT = "pre_planning_program";
-const std::string FormatAsInputTask::INPUT_POST_PLANNING_PROGRAM_PORT = "post_planning_program";
-const std::string FormatAsInputTask::OUTPUT_PROGRAM_PORT = "program";
-
-FormatAsInputTask::FormatAsInputTask() : TaskComposerTask("FormatAsInputTask", FormatAsInputTask::ports(), true) {}
+FormatAsInputTask::FormatAsInputTask() : TaskComposerTask("FormatAsInputTask", true) {}
 FormatAsInputTask::FormatAsInputTask(std::string name,
-                                     std::string input_pre_planning_program_key,
-                                     std::string input_post_planning_program_key,
-                                     std::string output_program_key,
+                                     const std::array<std::string, 2>& input_keys,
+                                     std::string output_key,
                                      bool is_conditional)
-  : TaskComposerTask(std::move(name), FormatAsInputTask::ports(), is_conditional)
+  : TaskComposerTask(std::move(name), is_conditional)
 {
-  input_keys_.add(INPUT_PRE_PLANNING_PROGRAM_PORT, std::move(input_pre_planning_program_key));
-  input_keys_.add(INPUT_POST_PLANNING_PROGRAM_PORT, std::move(input_post_planning_program_key));
-  output_keys_.add(OUTPUT_PROGRAM_PORT, std::move(output_program_key));
-  validatePorts();
+  input_keys_.reserve(2);
+  input_keys_.insert(input_keys_.end(), input_keys.begin(), input_keys.end());
+  output_keys_.push_back(std::move(output_key));
 }
 
 FormatAsInputTask::FormatAsInputTask(std::string name,
                                      const YAML::Node& config,
                                      const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), FormatAsInputTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (input_keys_.empty())
+    throw std::runtime_error("FormatAsInputTask, config missing 'inputs' entry");
+
+  if (input_keys_.size() != 2)
+    throw std::runtime_error("FormatAsInputTask, config 'inputs' entry requires two input key");
+
+  if (output_keys_.empty())
+    throw std::runtime_error("FormatAsInputTask, config missing 'outputs' entry");
+
+  if (output_keys_.size() > 1)
+    throw std::runtime_error("FormatAsInputTask, config 'outputs' entry requires one output key");
 }
 
-TaskComposerNodePorts FormatAsInputTask::ports()
-{
-  TaskComposerNodePorts ports;
-  ports.input_required[INPUT_PRE_PLANNING_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_POST_PLANNING_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-
-  ports.output_required[OUTPUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-
-  return ports;
-}
-
-std::unique_ptr<TaskComposerNodeInfo> FormatAsInputTask::runImpl(TaskComposerContext& context,
-                                                                 OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr FormatAsInputTask::runImpl(TaskComposerContext& context,
+                                                      OptionalTaskComposerExecutor /*executor*/) const
 {
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
 
   // --------------------
   // Check that inputs are valid
   // --------------------
-  auto input_formatted_data_poly = getData(*context.data_storage, INPUT_PRE_PLANNING_PROGRAM_PORT);
-  if (input_formatted_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  auto input_formatted_data_poly = context.data_storage->getData(input_keys_[0]);
+  if (input_formatted_data_poly.isNull() ||
+      input_formatted_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "Input '" + input_keys_.get(INPUT_PRE_PLANNING_PROGRAM_PORT) +
-                           "' instruction to FormatAsInputTask must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message = "Input[0] instruction to FormatAsInputTask must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
-  auto input_unformatted_data_poly = getData(*context.data_storage, INPUT_POST_PLANNING_PROGRAM_PORT);
-  if (input_unformatted_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  auto input_unformatted_data_poly = context.data_storage->getData(input_keys_[1]);
+  if (input_unformatted_data_poly.isNull() ||
+      input_unformatted_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "Input '" + input_keys_.get(INPUT_POST_PLANNING_PROGRAM_PORT) +
-                           "' instruction to FormatAsInputTask must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message = "Input[1] instruction to FormatAsInputTask must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
@@ -124,8 +104,8 @@ std::unique_ptr<TaskComposerNodeInfo> FormatAsInputTask::runImpl(TaskComposerCon
 
   if (mi_formatted_data.size() != mi_unformatted_data.size())
   {
-    info->status_message = "FormatAsInputTask, input programs are not same size";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message = "FormatAsInputTask, input programs are not same size";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
@@ -159,11 +139,10 @@ std::unique_ptr<TaskComposerNodeInfo> FormatAsInputTask::runImpl(TaskComposerCon
     }
   }
 
-  setData(*context.data_storage, OUTPUT_PROGRAM_PORT, input_formatted_data_poly);
+  context.data_storage->setData(output_keys_[0], input_formatted_data_poly);
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Successful";
+  info->message = "Successful";
   info->return_value = 1;
   return info;
 }
@@ -179,5 +158,6 @@ void FormatAsInputTask::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::FormatAsInputTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::FormatAsInputTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::FormatAsInputTask)

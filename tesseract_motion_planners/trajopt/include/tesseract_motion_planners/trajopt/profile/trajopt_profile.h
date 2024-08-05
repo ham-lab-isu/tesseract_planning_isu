@@ -28,19 +28,14 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <trajopt/fwd.hpp>
+#include <trajopt/problem_description.hpp>
 #include <vector>
 #include <memory>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_common/fwd.h>
-#include <tesseract_command_language/fwd.h>
-
-namespace tinyxml2
-{
-class XMLElement;  // NOLINT
-class XMLDocument;
-}  // namespace tinyxml2
+#include <tesseract_command_language/poly/move_instruction_poly.h>
+#include <tesseract_command_language/poly/cartesian_waypoint_poly.h>
+#include <tesseract_command_language/poly/joint_waypoint_poly.h>
 
 namespace tesseract_planning
 {
@@ -115,6 +110,9 @@ public:
   virtual tinyxml2::XMLElement* toXML(tinyxml2::XMLDocument& doc) const = 0;
 };
 
+using TrajOptSolverProfileMap = std::unordered_map<std::string, TrajOptSolverProfile::ConstPtr>;
+using TrajOptCompositeProfileMap = std::unordered_map<std::string, TrajOptCompositeProfile::ConstPtr>;
+using TrajOptPlanProfileMap = std::unordered_map<std::string, TrajOptPlanProfile::ConstPtr>;
 }  // namespace tesseract_planning
 
 #endif  // TESSERACT_MOTION_PLANNERS_TRAJOPT_PROFILE_H

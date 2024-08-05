@@ -26,93 +26,73 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/planning/nodes/profile_switch_task.h>
 #include <tesseract_task_composer/planning/profiles/profile_switch_profile.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 
 #include <tesseract_command_language/constants.h>
 #include <tesseract_command_language/utils.h>
-
 #include <tesseract_motion_planners/planner_utils.h>
 
 namespace tesseract_planning
 {
-// Requried
-const std::string ProfileSwitchTask::INPUT_PROGRAM_PORT = "program";
-const std::string ProfileSwitchTask::INPUT_PROFILES_PORT = "profiles";
-
-// Optional
-const std::string ProfileSwitchTask::INPUT_COMPOSITE_PROFILE_REMAPPING_PORT = "composite_profile_remapping";
-
-ProfileSwitchTask::ProfileSwitchTask() : TaskComposerTask("ProfileSwitchTask", ProfileSwitchTask::ports(), true) {}
-ProfileSwitchTask::ProfileSwitchTask(std::string name,
-                                     std::string input_program_key,
-                                     std::string input_profiles_key,
-                                     bool is_conditional)
-  : TaskComposerTask(std::move(name), ProfileSwitchTask::ports(), is_conditional)
+ProfileSwitchTask::ProfileSwitchTask() : TaskComposerTask("ProfileSwitchTask", true) {}
+ProfileSwitchTask::ProfileSwitchTask(std::string name, std::string input_key, bool is_conditional)
+  : TaskComposerTask(std::move(name), is_conditional)
 {
-  input_keys_.add(INPUT_PROGRAM_PORT, std::move(input_program_key));
-  input_keys_.add(INPUT_PROFILES_PORT, std::move(input_profiles_key));
-  validatePorts();
+  input_keys_.push_back(std::move(input_key));
 }
 
 ProfileSwitchTask::ProfileSwitchTask(std::string name,
                                      const YAML::Node& config,
                                      const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), ProfileSwitchTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (input_keys_.empty())
+    throw std::runtime_error("ProfileSwitchTask, config missing 'inputs' entry");
+
+  if (input_keys_.size() > 1)
+    throw std::runtime_error("ProfileSwitchTask, config 'inputs' entry currently only supports one input key");
+
+  if (!output_keys_.empty())
+    throw std::runtime_error("ProfileSwitchTask, does not support 'outputs' entry");
 }
 
-TaskComposerNodePorts ProfileSwitchTask::ports()
+TaskComposerNodeInfo::UPtr ProfileSwitchTask::runImpl(TaskComposerContext& context,
+                                                      OptionalTaskComposerExecutor /*executor*/) const
 {
-  TaskComposerNodePorts ports;
-  ports.input_required[INPUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_PROFILES_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_optional[INPUT_COMPOSITE_PROFILE_REMAPPING_PORT] = TaskComposerNodePorts::SINGLE;
-  return ports;
-}
+  // Get the problem
+  auto& problem = dynamic_cast<PlanningTaskComposerProblem&>(*context.problem);
 
-std::unique_ptr<TaskComposerNodeInfo> ProfileSwitchTask::runImpl(TaskComposerContext& context,
-                                                                 OptionalTaskComposerExecutor /*executor*/) const
-{
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
 
   // --------------------
   // Check that inputs are valid
   // --------------------
-  auto input_data_poly = getData(*context.data_storage, INPUT_PROGRAM_PORT);
+  auto input_data_poly = context.data_storage->getData(input_keys_[0]);
   if (input_data_poly.isNull() || input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "Input instruction to ProfileSwitch must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message = "Input instruction to ProfileSwitch must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
   // Get Composite Profile
-  auto profiles = getData(*context.data_storage, INPUT_PROFILES_PORT).as<std::shared_ptr<ProfileDictionary>>();
-  auto composite_profile_remapping_poly = getData(*context.data_storage, INPUT_COMPOSITE_PROFILE_REMAPPING_PORT, false);
   const auto& ci = input_data_poly.as<CompositeInstruction>();
   std::string profile = ci.getProfile();
-  profile = getProfileString(ns_, profile, composite_profile_remapping_poly);
+  profile = getProfileString(name_, profile, problem.composite_profile_remapping);
   auto cur_composite_profile =
-      getProfile<ProfileSwitchProfile>(ns_, profile, *profiles, std::make_shared<ProfileSwitchProfile>());
-  cur_composite_profile = applyProfileOverrides(ns_, profile, cur_composite_profile, ci.getProfileOverrides());
+      getProfile<ProfileSwitchProfile>(name_, profile, *problem.profiles, std::make_shared<ProfileSwitchProfile>());
+  cur_composite_profile = applyProfileOverrides(name_, profile, cur_composite_profile, ci.getProfileOverrides());
 
   // Return the value specified in the profile
   CONSOLE_BRIDGE_logDebug("ProfileSwitchProfile returning %d", cur_composite_profile->return_value);
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Successful";
+  info->message = "Successful";
   info->return_value = cur_composite_profile->return_value;
   return info;
 }
@@ -128,5 +108,6 @@ void ProfileSwitchTask::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::ProfileSwitchTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::ProfileSwitchTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::ProfileSwitchTask)

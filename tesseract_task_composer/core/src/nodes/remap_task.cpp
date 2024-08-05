@@ -26,28 +26,29 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
-#include <boost/serialization/map.hpp>
 #include <yaml-cpp/yaml.h>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/nodes/remap_task.h>
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
 
 namespace tesseract_planning
 {
-RemapTask::RemapTask() : TaskComposerTask("RemapTask", TaskComposerNodePorts{}, false) {}
+RemapTask::RemapTask() : TaskComposerTask("RemapTask", false) {}
 RemapTask::RemapTask(std::string name, std::map<std::string, std::string> remap, bool copy, bool is_conditional)
-  : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, is_conditional), remap_(std::move(remap)), copy_(copy)
+  : TaskComposerTask(std::move(name), is_conditional), remap_(std::move(remap)), copy_(copy)
 {
   if (remap_.empty())
     throw std::runtime_error("RemapTask, remap should not be empty!");
 }
 RemapTask::RemapTask(std::string name, const YAML::Node& config, const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (!input_keys_.empty())
+    throw std::runtime_error("RemapTask, input_keys should be empty!");
+
+  if (!output_keys_.empty())
+    throw std::runtime_error("RemapTask, output_keys should be empty!");
+
   if (YAML::Node n = config["remap"])
     remap_ = n.as<std::map<std::string, std::string>>();
   else
@@ -57,23 +58,21 @@ RemapTask::RemapTask(std::string name, const YAML::Node& config, const TaskCompo
     copy_ = n.as<bool>();
 }
 
-std::unique_ptr<TaskComposerNodeInfo> RemapTask::runImpl(TaskComposerContext& context,
-                                                         OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr RemapTask::runImpl(TaskComposerContext& context,
+                                              OptionalTaskComposerExecutor /*executor*/) const
 {
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   if (context.data_storage->remapData(remap_, copy_))
   {
     info->color = "green";
     info->return_value = 1;
-    info->status_code = 1;
-    info->status_message = "Successful";
+    info->message = "Successful";
   }
   else
   {
     info->color = "red";
     info->return_value = 0;
-    info->status_code = 0;
-    info->status_message = "Failed to remap data.";
+    info->message = "Failed to remap data.";
   }
   return info;
 }
@@ -98,5 +97,6 @@ void RemapTask::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::RemapTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::RemapTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::RemapTask)

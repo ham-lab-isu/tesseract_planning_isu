@@ -35,11 +35,10 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <string>
-#include <Eigen/Geometry>
-#include <trajopt_sqp/fwd.h>
-#include <trajopt_ifopt/fwd.h>
-#include <tesseract_common/eigen_types.h>
-#include <tesseract_kinematics/core/fwd.h>
+#include <Eigen/Core>
+#include <trajopt_sqp/qp_problem.h>
+
+#include <trajopt_ifopt/constraints/cartesian_position_constraint.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/example.h>
@@ -54,8 +53,8 @@ namespace tesseract_examples
 class OnlinePlanningExample : public Example
 {
 public:
-  OnlinePlanningExample(std::shared_ptr<tesseract_environment::Environment> env,
-                        std::shared_ptr<tesseract_visualization::Visualization> plotter = nullptr,
+  OnlinePlanningExample(tesseract_environment::Environment::Ptr env,
+                        tesseract_visualization::Visualization::Ptr plotter = nullptr,
                         int steps = 12,
                         double box_size = 0.01,
                         bool update_start_state = false,
@@ -103,18 +102,18 @@ private:
   double box_size_;
   bool update_start_state_{ false };
   bool use_continuous_{ false };
-  bool realtime_running_{ false };
+  bool realtime_running_;
 
-  std::shared_ptr<const tesseract_kinematics::KinematicGroup> manip_;
+  tesseract_kinematics::KinematicGroup::ConstPtr manip_;
   tesseract_visualization::TrajectoryPlayer player_;
   tesseract_common::TrajArray current_trajectory_;
   Eigen::Isometry3d target_pose_delta_;
   Eigen::Isometry3d target_pose_base_frame_;
 
   // We need to keep this around so we can update it
-  std::shared_ptr<trajopt_ifopt::CartPosConstraint> target_pose_constraint_;
+  trajopt_ifopt::CartPosConstraint::Ptr target_pose_constraint_;
   std::vector<std::string> joint_names_;
-  std::shared_ptr<trajopt_sqp::QPProblem> nlp_;
+  trajopt_sqp::QPProblem::Ptr nlp_;
 
   void updateAndPlotTrajectory(const Eigen::VectorXd& osqp_vals);
 };

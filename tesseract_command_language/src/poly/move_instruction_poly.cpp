@@ -1,12 +1,9 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/nvp.hpp>
-#include <boost/uuid/uuid.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/profile_dictionary.h>
-#include <tesseract_common/serialization.h>
 
 template <class Archive>
 void tesseract_planning::detail_move_instruction::MoveInstructionInterface::serialize(
@@ -83,23 +80,21 @@ const std::string& tesseract_planning::MoveInstructionPoly::getPathProfile() con
 }
 
 void tesseract_planning::MoveInstructionPoly::setProfileOverrides(
-    std::shared_ptr<const ProfileDictionary> profile_overrides)
+    tesseract_planning::ProfileDictionary::ConstPtr profile_overrides)
 {
   getInterface().setProfileOverrides(std::move(profile_overrides));
 }
-std::shared_ptr<const tesseract_planning::ProfileDictionary>
-tesseract_planning::MoveInstructionPoly::getProfileOverrides() const
+tesseract_planning::ProfileDictionary::ConstPtr tesseract_planning::MoveInstructionPoly::getProfileOverrides() const
 {
   return getInterface().getProfileOverrides();
 }
 
 void tesseract_planning::MoveInstructionPoly::setPathProfileOverrides(
-    std::shared_ptr<const ProfileDictionary> profile_overrides)
+    tesseract_planning::ProfileDictionary::ConstPtr profile_overrides)
 {
   getInterface().setPathProfileOverrides(std::move(profile_overrides));
 }
-std::shared_ptr<const tesseract_planning::ProfileDictionary>
-tesseract_planning::MoveInstructionPoly::getPathProfileOverrides() const
+tesseract_planning::ProfileDictionary::ConstPtr tesseract_planning::MoveInstructionPoly::getPathProfileOverrides() const
 {
   return getInterface().getPathProfileOverrides();
 }
@@ -171,12 +166,13 @@ void tesseract_planning::MoveInstructionPoly::serialize(Archive& ar, const unsig
   ar& boost::serialization::make_nvp("base", boost::serialization::base_object<MoveInstructionPolyBase>(*this));
 }
 
+#include <tesseract_common/serialization.h>
+TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::detail_move_instruction::MoveInstructionInterface)
+TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::MoveInstructionPolyBase)
+TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::MoveInstructionPoly)
+
 BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::detail_move_instruction::MoveInstructionInterface)
 BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::MoveInstructionPolyBase)
 BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::MoveInstructionPoly)
 
 TESSERACT_INSTRUCTION_EXPORT_IMPLEMENT(tesseract_planning::MoveInstructionPoly)
-
-TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::detail_move_instruction::MoveInstructionInterface)
-TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::MoveInstructionPolyBase)
-TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::MoveInstructionPoly)

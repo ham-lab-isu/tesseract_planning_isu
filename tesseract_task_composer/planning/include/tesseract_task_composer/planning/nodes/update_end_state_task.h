@@ -28,22 +28,15 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
-#include <tesseract_task_composer/planning/tesseract_task_composer_planning_nodes_export.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
 
 namespace tesseract_planning
 {
-class TESSERACT_TASK_COMPOSER_PLANNING_NODES_EXPORT UpdateEndStateTask : public TaskComposerTask
+class UpdateEndStateTask : public TaskComposerTask
 {
 public:
-  // Requried
-  static const std::string INPUT_CURRENT_PROGRAM_PORT;
-  static const std::string INPUT_NEXT_PROGRAM_PORT;
-  static const std::string OUTPUT_PROGRAM_PORT;
-
   using Ptr = std::shared_ptr<UpdateEndStateTask>;
   using ConstPtr = std::shared_ptr<const UpdateEndStateTask>;
   using UPtr = std::unique_ptr<UpdateEndStateTask>;
@@ -70,14 +63,13 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
 
-  static TaskComposerNodePorts ports();
-
-  std::unique_ptr<TaskComposerNodeInfo> runImpl(TaskComposerContext& context,
-                                                OptionalTaskComposerExecutor executor = std::nullopt) const override;
+  TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                     OptionalTaskComposerExecutor executor = std::nullopt) const override;
 };
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::UpdateEndStateTask)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::UpdateEndStateTask, "UpdateEndStateTask")
 
 #endif  // TESSERACT_TASK_COMPOSER_UPDATE_END_STATE_TASK_H

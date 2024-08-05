@@ -34,18 +34,16 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/uuid_serialize.hpp>
 #include <mutex>
-#include <tesseract_common/serialization.h>
-#include <tesseract_common/utils.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_node_info.h>
 #include <tesseract_task_composer/core/task_composer_node.h>
+#include <tesseract_common/utils.h>
 
 namespace tesseract_planning
 {
 TaskComposerNodeInfo::TaskComposerNodeInfo(const TaskComposerNode& node)
   : name(node.name_)
-  , ns(node.ns_)
   , uuid(node.uuid_)
   , parent_uuid(node.parent_uuid_)
   , inbound_edges(node.inbound_edges_)
@@ -59,18 +57,16 @@ bool TaskComposerNodeInfo::operator==(const TaskComposerNodeInfo& rhs) const
 
   bool equal = true;
   equal &= name == rhs.name;
-  equal &= ns == rhs.ns;
   equal &= uuid == rhs.uuid;
   equal &= parent_uuid == rhs.parent_uuid;
   equal &= return_value == rhs.return_value;
-  equal &= status_code == rhs.status_code;
-  equal &= status_message == rhs.status_message;
+  equal &= message == rhs.message;
   equal &= start_time == rhs.start_time;
   equal &= tesseract_common::almostEqualRelativeAndAbs(elapsed_time, rhs.elapsed_time, max_diff);
   equal &= tesseract_common::isIdentical(inbound_edges, rhs.inbound_edges, false);
   equal &= tesseract_common::isIdentical(outbound_edges, rhs.outbound_edges, true);
-  equal &= input_keys == rhs.input_keys;
-  equal &= output_keys == rhs.output_keys;
+  equal &= tesseract_common::isIdentical(input_keys, rhs.input_keys, false);
+  equal &= tesseract_common::isIdentical(output_keys, rhs.output_keys, false);
   equal &= color == rhs.color;
   equal &= dotgraph == rhs.dotgraph;
   equal &= aborted_ == rhs.aborted_;
@@ -87,12 +83,10 @@ template <class Archive>
 void TaskComposerNodeInfo::serialize(Archive& ar, const unsigned int /*version*/)
 {
   ar& boost::serialization::make_nvp("name", name);
-  ar& boost::serialization::make_nvp("ns", ns);
   ar& boost::serialization::make_nvp("uuid", uuid);
   ar& boost::serialization::make_nvp("parent_uuid", parent_uuid);
   ar& boost::serialization::make_nvp("return_value", return_value);
-  ar& boost::serialization::make_nvp("status_code", status_code);
-  ar& boost::serialization::make_nvp("status_message", status_message);
+  ar& boost::serialization::make_nvp("message", message);
   ar& boost::serialization::make_nvp("start_time",
                                      boost::serialization::make_binary_object(&start_time, sizeof(start_time)));
   ar& boost::serialization::make_nvp("elapsed_time", elapsed_time);
@@ -111,7 +105,7 @@ TaskComposerNodeInfoContainer::TaskComposerNodeInfoContainer(const TaskComposerN
   std::shared_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  aborting_node_ = other.aborting_node_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  aborting_node_ = other.aborting_node_;
   for (const auto& pair : other.info_map_)
     info_map_[pair.first] = pair.second->clone();
 }
@@ -121,7 +115,7 @@ TaskComposerNodeInfoContainer& TaskComposerNodeInfoContainer::operator=(const Ta
   std::shared_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  aborting_node_ = other.aborting_node_;  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  aborting_node_ = other.aborting_node_;
   for (const auto& pair : other.info_map_)
     info_map_[pair.first] = pair.second->clone();
 
@@ -134,8 +128,8 @@ TaskComposerNodeInfoContainer::TaskComposerNodeInfoContainer(TaskComposerNodeInf
   std::unique_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  aborting_node_ = other.aborting_node_;   // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  info_map_ = std::move(other.info_map_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  aborting_node_ = other.aborting_node_;
+  info_map_ = std::move(other.info_map_);
 }
 TaskComposerNodeInfoContainer& TaskComposerNodeInfoContainer::operator=(TaskComposerNodeInfoContainer&& other) noexcept
 {
@@ -143,8 +137,8 @@ TaskComposerNodeInfoContainer& TaskComposerNodeInfoContainer::operator=(TaskComp
   std::unique_lock rhs_lock(other.mutex_, std::defer_lock);
   std::scoped_lock lock{ lhs_lock, rhs_lock };
 
-  aborting_node_ = other.aborting_node_;   // NOLINT(cppcoreguidelines-prefer-member-initializer)
-  info_map_ = std::move(other.info_map_);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+  aborting_node_ = other.aborting_node_;
+  info_map_ = std::move(other.info_map_);
 
   return *this;
 }
@@ -165,19 +159,6 @@ TaskComposerNodeInfo::UPtr TaskComposerNodeInfoContainer::getInfo(const boost::u
   return it->second->clone();
 }
 
-std::vector<TaskComposerNodeInfo::UPtr>
-TaskComposerNodeInfoContainer::find(const std::function<bool(const TaskComposerNodeInfo&)>& search_fn) const
-{
-  std::unique_lock<std::shared_mutex> lock(mutex_);
-  std::vector<TaskComposerNodeInfo::UPtr> results;
-  for (const auto& info : info_map_)
-  {
-    if (search_fn(*info.second))
-      results.push_back(info.second->clone());
-  }
-  return results;
-}
-
 void TaskComposerNodeInfoContainer::setAborted(const boost::uuids::uuid& node_uuid)
 {
   assert(!node_uuid.is_nil());
@@ -196,13 +177,6 @@ void TaskComposerNodeInfoContainer::clear()
   std::unique_lock<std::shared_mutex> lock(mutex_);
   aborting_node_ = boost::uuids::uuid{};
   info_map_.clear();
-}
-
-void TaskComposerNodeInfoContainer::prune(const std::function<void(TaskComposerNodeInfo& node_info)>& prune_fn)
-{
-  std::unique_lock<std::shared_mutex> lock(mutex_);
-  for (auto& info : info_map_)
-    prune_fn(*info.second);
 }
 
 std::map<boost::uuids::uuid, TaskComposerNodeInfo::UPtr> TaskComposerNodeInfoContainer::getInfoMap() const
@@ -291,8 +265,9 @@ void TaskComposerNodeInfoContainer::serialize(Archive& ar, const unsigned int /*
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerNodeInfo)
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerNodeInfoContainer)
-
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerNodeInfo)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerNodeInfo)
+
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerNodeInfoContainer)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerNodeInfoContainer)

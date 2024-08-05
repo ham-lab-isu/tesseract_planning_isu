@@ -27,44 +27,28 @@
 #define TESSERACT_TASK_COMPOSER_DISCRETE_CONTACT_CHECK_TASK_H
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <vector>
 #include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
-#include <tesseract_task_composer/planning/tesseract_task_composer_planning_nodes_export.h>
+#include <vector>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
 #include <tesseract_task_composer/core/task_composer_node_info.h>
 
-#include <tesseract_environment/fwd.h>
-#include <tesseract_collision/core/types.h>
+#include <tesseract_environment/environment.h>
 
 namespace tesseract_planning
 {
 class TaskComposerPluginFactory;
-class TESSERACT_TASK_COMPOSER_PLANNING_NODES_EXPORT DiscreteContactCheckTask : public TaskComposerTask
+class DiscreteContactCheckTask : public TaskComposerTask
 {
 public:
-  // Requried
-  static const std::string INPUT_PROGRAM_PORT;
-  static const std::string INPUT_ENVIRONMENT_PORT;
-  static const std::string INPUT_PROFILES_PORT;
-
-  // Optional
-  static const std::string INPUT_MANIP_INFO_PORT;
-  static const std::string INPUT_COMPOSITE_PROFILE_REMAPPING_PORT;
-
   using Ptr = std::shared_ptr<DiscreteContactCheckTask>;
   using ConstPtr = std::shared_ptr<const DiscreteContactCheckTask>;
   using UPtr = std::unique_ptr<DiscreteContactCheckTask>;
   using ConstUPtr = std::unique_ptr<const DiscreteContactCheckTask>;
 
   DiscreteContactCheckTask();
-  explicit DiscreteContactCheckTask(std::string name,
-                                    std::string input_program_key,
-                                    std::string input_environment_key,
-                                    std::string input_profiles_key,
-                                    bool conditional = true);
+  explicit DiscreteContactCheckTask(std::string name, std::string input_key, bool conditional = true);
   explicit DiscreteContactCheckTask(std::string name,
                                     const YAML::Node& config,
                                     const TaskComposerPluginFactory& plugin_factory);
@@ -84,10 +68,8 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
 
-  static TaskComposerNodePorts ports();
-
-  std::unique_ptr<TaskComposerNodeInfo>
-  runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor executor = std::nullopt) const override final;
+  TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                     OptionalTaskComposerExecutor executor = std::nullopt) const override final;
 };
 
 class DiscreteContactCheckTaskInfo : public TaskComposerNodeInfo
@@ -99,12 +81,12 @@ public:
   using ConstUPtr = std::unique_ptr<const DiscreteContactCheckTaskInfo>;
 
   DiscreteContactCheckTaskInfo() = default;
-  DiscreteContactCheckTaskInfo(const TaskComposerNodeInfo& task);
+  DiscreteContactCheckTaskInfo(const DiscreteContactCheckTask& task);
 
-  std::shared_ptr<const tesseract_environment::Environment> env;
+  tesseract_environment::Environment::ConstPtr env;
   std::vector<tesseract_collision::ContactResultMap> contact_results;
 
-  std::unique_ptr<TaskComposerNodeInfo> clone() const override;
+  TaskComposerNodeInfo::UPtr clone() const override;
 
   bool operator==(const DiscreteContactCheckTaskInfo& rhs) const;
   bool operator!=(const DiscreteContactCheckTaskInfo& rhs) const;
@@ -117,6 +99,7 @@ private:
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::DiscreteContactCheckTask)
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::DiscreteContactCheckTaskInfo)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::DiscreteContactCheckTask, "DiscreteContactCheckTask")
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::DiscreteContactCheckTaskInfo, "DiscreteContactCheckTaskInfo")
 #endif  // TESSERACT_TASK_COMPOSER_DISCRETE_CONTACT_CHECK_TASK_H

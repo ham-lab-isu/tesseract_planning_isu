@@ -28,32 +28,21 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
+#include <tesseract_environment/utils.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_motion_planners/simple/simple_motion_planner.h>
 #include <tesseract_motion_planners/simple/interpolation.h>
-#include <tesseract_motion_planners/simple/profile/simple_planner_profile.h>
+#include <tesseract_motion_planners/simple/simple_motion_planner.h>
 #include <tesseract_motion_planners/simple/profile/simple_planner_lvs_no_ik_plan_profile.h>
-#include <tesseract_motion_planners/core/types.h>
+#include <tesseract_motion_planners/core/utils.h>
+#include <tesseract_command_language/poly/waypoint_poly.h>
+#include <tesseract_command_language/composite_instruction.h>
+#include <tesseract_command_language/utils.h>
 #include <tesseract_motion_planners/planner_utils.h>
 
-#include <tesseract_common/joint_state.h>
-
-#include <tesseract_kinematics/core/joint_group.h>
-
-#include <tesseract_environment/environment.h>
-
-#include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/utils.h>
-
-// #include <tesseract_environment/utils.h>
-// #include <tesseract_motion_planners/core/utils.h>
-// #include <tesseract_command_language/poly/waypoint_poly.h>
-// #include <tesseract_command_language/composite_instruction.h>
-
 constexpr auto SOLUTION_FOUND{ "Found valid solution" };
-constexpr auto ERROR_INVALID_INPUT{ "Failed invalid input: " };
-constexpr auto FAILED_TO_FIND_VALID_SOLUTION{ "Failed to find valid solution: " };
+constexpr auto ERROR_INVALID_INPUT{ "Input to planner is invalid. Check that instructions and seed are compatible" };
+constexpr auto FAILED_TO_FIND_VALID_SOLUTION{ "Failed to find valid solution" };
 
 namespace tesseract_planning
 {
@@ -67,19 +56,15 @@ bool SimpleMotionPlanner::terminate()
 
 void SimpleMotionPlanner::clear() {}
 
-std::unique_ptr<MotionPlanner> SimpleMotionPlanner::clone() const
-{
-  return std::make_unique<SimpleMotionPlanner>(name_);
-}
+MotionPlanner::Ptr SimpleMotionPlanner::clone() const { return std::make_shared<SimpleMotionPlanner>(name_); }
 
 PlannerResponse SimpleMotionPlanner::solve(const PlannerRequest& request) const
 {
   PlannerResponse response;
-  std::string reason;
-  if (!checkRequest(request, reason))  // NOLINT
+  if (!checkRequest(request))
   {
     response.successful = false;
-    response.message = std::string(ERROR_INVALID_INPUT) + reason;
+    response.message = ERROR_INVALID_INPUT;
     return response;
   }
 
@@ -108,7 +93,7 @@ PlannerResponse SimpleMotionPlanner::solve(const PlannerRequest& request) const
   {
     CONSOLE_BRIDGE_logError("SimplePlanner failed to generate problem: %s.", e.what());
     response.successful = false;
-    response.message = std::string(FAILED_TO_FIND_VALID_SOLUTION) + e.what();
+    response.message = FAILED_TO_FIND_VALID_SOLUTION;
     return response;
   }
 
@@ -124,19 +109,15 @@ PlannerResponse SimpleMotionPlanner::solve(const PlannerRequest& request) const
     if (mi.getWaypoint().isJointWaypoint() || mi.getWaypoint().isStateWaypoint())
     {
       Eigen::VectorXd jp = getJointPosition(mi.getWaypoint());
-      assert(tesseract_common::satisfiesLimits<double>(jp, joint_limits));
-      tesseract_common::enforceLimits<double>(jp, joint_limits);
+      assert(tesseract_common::satisfiesPositionLimits<double>(jp, joint_limits));
+      tesseract_common::enforcePositionLimits<double>(jp, joint_limits);
       setJointPosition(mi.getWaypoint(), jp);
     }
     else if (mi.getWaypoint().isCartesianWaypoint())
     {
-      auto& cwp = mi.getWaypoint().as<CartesianWaypointPoly>();
-      if (cwp.hasSeed())
-      {
-        Eigen::VectorXd& jp = cwp.getSeed().position;
-        assert(tesseract_common::satisfiesLimits<double>(jp, joint_limits));
-        tesseract_common::enforceLimits<double>(jp, joint_limits);
-      }
+      Eigen::VectorXd& jp = mi.getWaypoint().as<CartesianWaypointPoly>().getSeed().position;
+      assert(tesseract_common::satisfiesPositionLimits<double>(jp, joint_limits));
+      tesseract_common::enforcePositionLimits<double>(jp, joint_limits);
     }
     else
       throw std::runtime_error("Unsupported waypoint type.");

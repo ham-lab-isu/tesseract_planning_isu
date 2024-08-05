@@ -30,17 +30,12 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <vector>
-#include <memory>
+#include <Eigen/Geometry>
 #include <Eigen/Core>
-#include <trajopt/fwd.hpp>
-#include <trajopt_common/fwd.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/trajopt/trajopt_collision_config.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_profile.h>
-
-#include <tesseract_collision/core/fwd.h>
-#include <tesseract_collision/core/types.h>
 
 namespace tesseract_planning
 {
@@ -59,7 +54,7 @@ public:
   TrajOptDefaultCompositeProfile& operator=(TrajOptDefaultCompositeProfile&&) = default;
 
   /** @brief The type of contact test to perform: FIRST, CLOSEST, ALL */
-  tesseract_collision::ContactTestType contact_test_type{ tesseract_collision::ContactTestType::ALL };
+  tesseract_collision::ContactTestType contact_test_type = tesseract_collision::ContactTestType::ALL;
   /** @brief Configuration info for collisions that are modeled as costs */
   CollisionCostConfig collision_cost_config;
   /** @brief Configuration info for collisions that are modeled as constraints */
@@ -99,9 +94,9 @@ public:
   double longest_valid_segment_length = 0.1;
 
   /**@brief Special link collision cost distances */
-  std::shared_ptr<trajopt_common::SafetyMarginData> special_collision_cost{ nullptr };
+  trajopt_common::SafetyMarginData::Ptr special_collision_cost{ nullptr };
   /**@brief Special link collision constraint distances */
-  std::shared_ptr<trajopt_common::SafetyMarginData> special_collision_constraint{ nullptr };
+  trajopt_common::SafetyMarginData::Ptr special_collision_constraint{ nullptr };
 
   void apply(trajopt::ProblemConstructionInfo& pci,
              int start_index,

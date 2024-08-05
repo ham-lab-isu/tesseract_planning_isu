@@ -27,25 +27,22 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
-#include <yaml-cpp/yaml.h>
 #include <boost/serialization/base_object.hpp>
-#include <tesseract_common/serialization.h>
-#include <tesseract_common/timer.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
-#include <tesseract_task_composer/core/task_composer_context.h>
+#include <tesseract_common/timer.h>
 
 namespace tesseract_planning
 {
-TaskComposerTask::TaskComposerTask() : TaskComposerTask("TaskComposerTask", TaskComposerNodePorts{}, true) {}
-TaskComposerTask::TaskComposerTask(std::string name, TaskComposerNodePorts ports, bool conditional)
-  : TaskComposerNode(std::move(name), TaskComposerNodeType::TASK, std::move(ports), conditional)
+TaskComposerTask::TaskComposerTask(std::string name) : TaskComposerTask(std::move(name), true) {}
+TaskComposerTask::TaskComposerTask(std::string name, bool conditional)
+  : TaskComposerNode(std::move(name), TaskComposerNodeType::TASK, conditional)
 {
 }
 
-TaskComposerTask::TaskComposerTask(std::string name, TaskComposerNodePorts ports, const YAML::Node& config)
-  : TaskComposerNode(std::move(name), TaskComposerNodeType::TASK, std::move(ports), config)
+TaskComposerTask::TaskComposerTask(std::string name, const YAML::Node& config)
+  : TaskComposerNode(std::move(name), TaskComposerNodeType::TASK, config)
 {
   try
   {
@@ -61,7 +58,64 @@ TaskComposerTask::TaskComposerTask(std::string name, TaskComposerNodePorts ports
 
 void TaskComposerTask::setTriggerAbort(bool enable) { trigger_abort_ = enable; }
 
-bool TaskComposerTask::operator==(const TaskComposerTask& rhs) const { return (TaskComposerNode::operator==(rhs)); }
+int TaskComposerTask::run(TaskComposerContext& context, OptionalTaskComposerExecutor executor) const
+{
+  auto start_time = std::chrono::system_clock::now();
+  if (context.isAborted())
+  {
+    auto info = std::make_unique<TaskComposerNodeInfo>(*this);
+    info->start_time = start_time;
+    info->input_keys = input_keys_;
+    info->output_keys = output_keys_;
+    info->return_value = 0;
+    info->color = "white";
+    info->message = "Aborted";
+    info->aborted_ = true;
+    context.task_infos.addInfo(std::move(info));
+    return 0;
+  }
+
+  tesseract_common::Timer timer;
+  TaskComposerNodeInfo::UPtr results;
+  timer.start();
+  try
+  {
+    results = runImpl(context, executor);
+  }
+  catch (const std::exception& e)
+  {
+    results = std::make_unique<TaskComposerNodeInfo>(*this);
+    results->color = "red";
+    results->message = "Exception thrown: " + std::string(e.what());
+    results->return_value = 0;
+  }
+  timer.stop();
+  results->input_keys = input_keys_;
+  results->output_keys = output_keys_;
+  results->start_time = start_time;
+  results->elapsed_time = timer.elapsedSeconds();
+
+  int value = results->return_value;
+  assert(value >= 0);
+
+  // Call abort if required
+  if (trigger_abort_ && !context.isAborted())
+  {
+    results->message += " (Abort Triggered)";
+    context.abort(uuid_);
+  }
+
+  context.task_infos.addInfo(std::move(results));
+  return value;
+}
+
+bool TaskComposerTask::operator==(const TaskComposerTask& rhs) const
+{
+  bool equal{ true };
+  equal &= trigger_abort_ == rhs.trigger_abort_;
+  equal &= (TaskComposerNode::operator==(rhs));
+  return equal;
+}
 
 // LCOV_EXCL_START
 bool TaskComposerTask::operator!=(const TaskComposerTask& rhs) const { return !operator==(rhs); }
@@ -70,10 +124,12 @@ bool TaskComposerTask::operator!=(const TaskComposerTask& rhs) const { return !o
 template <class Archive>
 void TaskComposerTask::serialize(Archive& ar, const unsigned int /*version*/)
 {
+  ar& boost::serialization::make_nvp("trigger_abort", trigger_abort_);
   ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(TaskComposerNode);
 }
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerTask)

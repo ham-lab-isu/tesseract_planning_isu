@@ -28,6 +28,12 @@
 #ifndef TESSERACT_EXAMPLES_PUZZLE_PIECE_AUXILLARY_AXES_EXAMPLE_H
 #define TESSERACT_EXAMPLES_PUZZLE_PIECE_AUXILLARY_AXES_EXAMPLE_H
 
+#include <tesseract_common/macros.h>
+TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
+#include <string>
+TESSERACT_COMMON_IGNORE_WARNINGS_POP
+
+#include <tesseract_common/types.h>
 #include <tesseract_examples/example.h>
 
 namespace tesseract_examples
@@ -40,10 +46,8 @@ namespace tesseract_examples
 class PuzzlePieceAuxillaryAxesExample : public Example
 {
 public:
-  PuzzlePieceAuxillaryAxesExample(std::shared_ptr<tesseract_environment::Environment> env,
-                                  std::shared_ptr<tesseract_visualization::Visualization> plotter = nullptr,
-                                  bool ifopt = false,
-                                  bool debug = false);
+  PuzzlePieceAuxillaryAxesExample(tesseract_environment::Environment::Ptr env,
+                                  tesseract_visualization::Visualization::Ptr plotter = nullptr);
   ~PuzzlePieceAuxillaryAxesExample() override = default;
   PuzzlePieceAuxillaryAxesExample(const PuzzlePieceAuxillaryAxesExample&) = default;
   PuzzlePieceAuxillaryAxesExample& operator=(const PuzzlePieceAuxillaryAxesExample&) = default;
@@ -53,8 +57,8 @@ public:
   bool run() override final;
 
 private:
-  bool ifopt_;
-  bool debug_;
+  static tesseract_common::VectorIsometry3d
+  makePuzzleToolPoses(const tesseract_common::ResourceLocator::ConstPtr& locator);
 };
 
 }  // namespace tesseract_examples

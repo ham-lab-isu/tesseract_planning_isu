@@ -1,22 +1,16 @@
-# Need to create export header so static class variables can be exported on windows build
-include(GenerateExportHeader)
-
 add_library(
   ${PROJECT_NAME}
   src/task_composer_data_storage.cpp
   src/task_composer_context.cpp
   src/task_composer_executor.cpp
-  src/task_composer_future.cpp
   src/task_composer_graph.cpp
-  src/task_composer_keys.cpp
-  src/task_composer_node_info.cpp
-  src/task_composer_node_ports.cpp
   src/task_composer_node.cpp
+  src/task_composer_node_info.cpp
   src/task_composer_pipeline.cpp
   src/task_composer_plugin_factory.cpp
+  src/task_composer_problem.cpp
   src/task_composer_server.cpp
   src/task_composer_task.cpp)
-
 target_link_libraries(
   ${PROJECT_NAME}
   PUBLIC console_bridge::console_bridge
@@ -39,22 +33,17 @@ target_code_coverage(
   ALL
   EXCLUDE ${COVERAGE_EXCLUDE}
   ENABLE ${TESSERACT_ENABLE_CODE_COVERAGE})
-target_include_directories(
-  ${PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-                         "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/../>" "$<INSTALL_INTERFACE:include>")
+target_include_directories(${PROJECT_NAME} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                                                  "$<INSTALL_INTERFACE:include>")
 
 add_library(
   ${PROJECT_NAME}_nodes
   src/nodes/done_task.cpp
   src/nodes/error_task.cpp
-  src/nodes/has_data_storage_entry_task.cpp
   src/nodes/remap_task.cpp
   src/nodes/start_task.cpp
   src/nodes/sync_task.cpp
   src/test_suite/test_task.cpp)
-
-generate_export_header(${PROJECT_NAME}_nodes)
-
 target_link_libraries(
   ${PROJECT_NAME}_nodes
   PUBLIC ${PROJECT_NAME}
@@ -105,22 +94,11 @@ install(
   PATTERN "*.h"
   PATTERN "*.hpp")
 
-install(FILES ${PROJECT_BINARY_DIR}/core/tesseract_task_composer_nodes_export.h
-        DESTINATION include/${PROJECT_NAME}/core/ COMPONENT core)
-
-# Plugin should not be export only installed
-install(
-  TARGETS ${PROJECT_NAME}_factories
-  COMPONENT core
-  RUNTIME DESTINATION bin
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib)
-
 # Configure Components
 configure_component(
   COMPONENT core
   NAMESPACE tesseract
-  TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_nodes
+  TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_nodes ${PROJECT_NAME}_factories
   DEPENDENCIES
     console_bridge
     tesseract_common

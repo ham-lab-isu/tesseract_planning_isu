@@ -30,13 +30,13 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <string>
 #include <memory>
+#include <optional>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_node.h>
 
 namespace tesseract_planning
 {
-class TaskComposerContext;
 class TaskComposerExecutor;
 class TaskComposerTask : public TaskComposerNode
 {
@@ -46,9 +46,12 @@ public:
   using UPtr = std::unique_ptr<TaskComposerTask>;
   using ConstUPtr = std::unique_ptr<const TaskComposerTask>;
 
-  TaskComposerTask();
-  explicit TaskComposerTask(std::string name, TaskComposerNodePorts ports, bool conditional);
-  explicit TaskComposerTask(std::string name, TaskComposerNodePorts ports, const YAML::Node& config);
+  /** @brief Most task will not require a executor so making it optional */
+  using OptionalTaskComposerExecutor = std::optional<std::reference_wrapper<TaskComposerExecutor>>;
+
+  explicit TaskComposerTask(std::string name = "TaskComposerTask");
+  explicit TaskComposerTask(std::string name, bool conditional);
+  explicit TaskComposerTask(std::string name, const YAML::Node& config);
   ~TaskComposerTask() override = default;
   TaskComposerTask(const TaskComposerTask&) = delete;
   TaskComposerTask& operator=(const TaskComposerTask&) = delete;
@@ -64,16 +67,25 @@ public:
    */
   void setTriggerAbort(bool enable);
 
+  int run(TaskComposerContext& context, OptionalTaskComposerExecutor executor = std::nullopt) const;
+
 protected:
+  /** @brief Indicate if task triggers abort */
+  bool trigger_abort_{ false };
+
   friend struct tesseract_common::Serialization;
   friend class boost::serialization::access;
 
   template <class Archive>
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
+
+  virtual TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                             OptionalTaskComposerExecutor executor = std::nullopt) const = 0;
 };
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::TaskComposerTask)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::TaskComposerTask, "TaskComposerTask")
 
 #endif  // TESSERACT_TASK_COMPOSER_TASK_COMPOSER_TASK_H

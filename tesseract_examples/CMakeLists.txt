@@ -48,7 +48,6 @@ tesseract_variables()
 
 add_library(
   ${PROJECT_NAME}
-  src/example.cpp
   src/basic_cartesian_example.cpp
   src/car_seat_example.cpp
   src/freespace_hybrid_example.cpp
@@ -69,7 +68,7 @@ target_link_libraries(
   trajopt::trajopt_sqp
   trajopt::trajopt_ifopt
   tesseract::tesseract_task_composer
-  tesseract::tesseract_task_composer_planning_nodes
+  tesseract::tesseract_task_composer_planning
   console_bridge::console_bridge
   ${PCL_LIBRARIES})
 target_compile_options(${PROJECT_NAME} PUBLIC ${TESSERACT_COMPILE_OPTIONS})

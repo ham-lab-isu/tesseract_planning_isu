@@ -24,35 +24,12 @@
  * limitations under the License.
  */
 
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <tinyxml2.h>
-#include <OsqpEigen/Settings.hpp>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
 #include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_solver_profile.h>
-#include <tesseract_motion_planners/trajopt_ifopt/trajopt_ifopt_problem.h>
-#include <tesseract_motion_planners/trajopt_ifopt/trajopt_ifopt_utils.h>
 
 namespace tesseract_planning
 {
-TrajOptIfoptDefaultSolverProfile::TrajOptIfoptDefaultSolverProfile()
-{
-  convex_solver_settings = std::make_unique<OsqpEigen::Settings>();
-  convex_solver_settings->setVerbosity(false);
-  convex_solver_settings->setWarmStart(true);
-  convex_solver_settings->setPolish(true);
-  convex_solver_settings->setAdaptiveRho(true);
-  convex_solver_settings->setMaxIteration(8192);
-  convex_solver_settings->setAbsoluteTolerance(1e-4);
-  convex_solver_settings->setRelativeTolerance(1e-6);
-}
-
-TrajOptIfoptDefaultSolverProfile::~TrajOptIfoptDefaultSolverProfile() = default;
-
 void TrajOptIfoptDefaultSolverProfile::apply(TrajOptIfoptProblem& problem) const
 {
-  copyOSQPEigenSettings(*problem.convex_solver_settings, *convex_solver_settings);
   problem.opt_info = opt_info;
   problem.callbacks = callbacks;
 }

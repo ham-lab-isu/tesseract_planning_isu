@@ -35,7 +35,6 @@ using TimeOptimalParameterizationTaskFactory = TaskComposerTaskFactory<TimeOptim
 
 }  // namespace tesseract_planning
 
-// clang-format off
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-TESSERACT_ADD_TASK_COMPOSER_NODE_PLUGIN(tesseract_planning::TimeOptimalParameterizationTaskFactory, TimeOptimalParameterizationTaskFactory)
-// clang-format on
+TESSERACT_ADD_TASK_COMPOSER_NODE_PLUGIN(tesseract_planning::TimeOptimalParameterizationTaskFactory,
+                                        TimeOptimalParameterizationTaskFactory)

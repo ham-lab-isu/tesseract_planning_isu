@@ -23,77 +23,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <trajopt_ifopt/variable_sets/joint_position_variable.h>
-#include <trajopt_ifopt/constraints/cartesian_line_constraint.h>
-#include <trajopt_ifopt/constraints/cartesian_position_constraint.h>
-#include <trajopt_ifopt/constraints/inverse_kinematics_constraint.h>
-#include <trajopt_ifopt/constraints/joint_acceleration_constraint.h>
-#include <trajopt_ifopt/constraints/joint_jerk_constraint.h>
-#include <trajopt_ifopt/constraints/joint_position_constraint.h>
-#include <trajopt_ifopt/constraints/joint_velocity_constraint.h>
-#include <trajopt_ifopt/constraints/collision/continuous_collision_constraint.h>
-#include <trajopt_ifopt/constraints/collision/discrete_collision_constraint.h>
-#include <trajopt_ifopt/constraints/collision/continuous_collision_evaluators.h>
-#include <trajopt_ifopt/constraints/collision/discrete_collision_evaluators.h>
-#include <trajopt_ifopt/utils/ifopt_utils.h>
-#include <trajopt_common/collision_types.h>
-#include <trajopt_sqp/qp_problem.h>
-#include <ifopt/constraint_set.h>
-#include <OsqpEigen/Settings.hpp>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
 #include <tesseract_motion_planners/trajopt_ifopt/trajopt_ifopt_utils.h>
 #include <tesseract_motion_planners/trajopt_ifopt/trajopt_ifopt_problem.h>
-
 #include <tesseract_common/utils.h>
-#include <tesseract_common/manipulator_info.h>
-#include <tesseract_kinematics/core/joint_group.h>
 #include <tesseract_collision/core/common.h>
-#include <tesseract_collision/core/discrete_contact_manager.h>
-#include <tesseract_collision/core/continuous_contact_manager.h>
-#include <tesseract_environment/environment.h>
-#include <tesseract_command_language/poly/joint_waypoint_poly.h>
+#include <trajopt_ifopt/trajopt_ifopt.h>
+
+#include <ifopt/problem.h>
 
 namespace tesseract_planning
 {
-void copyOSQPEigenSettings(OsqpEigen::Settings& lhs, const OsqpEigen::Settings& rhs)
-{
-  const auto& settings = *rhs.getSettings();
-  lhs.setRho(settings.rho);
-  lhs.setSigma(settings.sigma);
-  lhs.setScaling(static_cast<int>(settings.scaling));
-  lhs.setAdaptiveRho(static_cast<bool>(settings.adaptive_rho));
-  lhs.setAdaptiveRhoInterval(static_cast<int>(settings.adaptive_rho_interval));
-  lhs.setAdaptiveRhoTolerance(settings.adaptive_rho_tolerance);
-  lhs.setAdaptiveRhoFraction(settings.adaptive_rho_fraction);
-  lhs.setMaxIteration(static_cast<int>(settings.max_iter));
-  lhs.setAbsoluteTolerance(settings.eps_abs);
-  lhs.setRelativeTolerance(settings.eps_rel);
-  lhs.setPrimalInfeasibilityTollerance(settings.eps_prim_inf);
-  lhs.setDualInfeasibilityTollerance(settings.eps_dual_inf);
-  lhs.setAlpha(settings.alpha);
-  lhs.setLinearSystemSolver(settings.linsys_solver);
-  lhs.setDelta(settings.delta);
-  lhs.setPolish(static_cast<bool>(settings.polish));
-  lhs.setPolishRefineIter(static_cast<int>(settings.polish_refine_iter));
-  lhs.setVerbosity(static_cast<bool>(settings.verbose));
-  lhs.setScaledTerimination(static_cast<bool>(settings.scaled_termination));
-  lhs.setCheckTermination(static_cast<int>(settings.check_termination));
-  lhs.setWarmStart(static_cast<bool>(settings.warm_start));
-  lhs.setTimeLimit(settings.time_limit);
-}
-
-ifopt::ConstraintSet::Ptr
-createCartesianPositionConstraint(const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                  const std::shared_ptr<const tesseract_kinematics::JointGroup>& manip,
-                                  const std::string& source_frame,
-                                  const std::string& target_frame,
-                                  const Eigen::Isometry3d& source_frame_offset,
-                                  const Eigen::Isometry3d& target_frame_offset,
-                                  const Eigen::Ref<const Eigen::VectorXd>& coeffs)
+ifopt::ConstraintSet::Ptr createCartesianPositionConstraint(const trajopt_ifopt::JointPosition::ConstPtr& var,
+                                                            const tesseract_kinematics::JointGroup::ConstPtr& manip,
+                                                            const std::string& source_frame,
+                                                            const std::string& target_frame,
+                                                            const Eigen::Isometry3d& source_frame_offset,
+                                                            const Eigen::Isometry3d& target_frame_offset,
+                                                            const Eigen::Ref<const Eigen::VectorXd>& coeffs)
 {
   std::vector<int> indices;
   std::vector<double> constraint_coeffs;
@@ -117,11 +63,125 @@ createCartesianPositionConstraint(const std::shared_ptr<const trajopt_ifopt::Joi
   return constraint;
 }
 
+bool addCartesianPositionConstraint(trajopt_sqp::QPProblem& nlp,
+                                    const trajopt_ifopt::JointPosition::ConstPtr& var,
+                                    const tesseract_kinematics::JointGroup::ConstPtr& manip,
+                                    const std::string& source_frame,
+                                    const std::string& target_frame,
+                                    const Eigen::Isometry3d& source_frame_offset,
+                                    const Eigen::Isometry3d& target_frame_offset,
+                                    const Eigen::Ref<const Eigen::VectorXd>& coeffs)
+{
+  auto constraint = createCartesianPositionConstraint(
+      var, manip, source_frame, target_frame, source_frame_offset, target_frame_offset, coeffs);
+  nlp.addConstraintSet(constraint);
+  return true;
+}
+
+bool addCartesianPositionSquaredCost(trajopt_sqp::QPProblem& nlp,
+                                     const trajopt_ifopt::JointPosition::ConstPtr& var,
+                                     const tesseract_kinematics::JointGroup::ConstPtr& manip,
+                                     const std::string& source_frame,
+                                     const std::string& target_frame,
+                                     const Eigen::Isometry3d& source_frame_offset,
+                                     const Eigen::Isometry3d& target_frame_offset,
+                                     const Eigen::Ref<const Eigen::VectorXd>& coeffs)
+{
+  std::vector<double> constraint_coeffs;
+  std::vector<double> cost_coeffs;
+  for (Eigen::Index i = 0; i < coeffs.rows(); ++i)
+  {
+    if (tesseract_common::almostEqualRelativeAndAbs(coeffs(i), 0.0))
+    {
+      constraint_coeffs.push_back(0);
+    }
+    else
+    {
+      constraint_coeffs.push_back(1);
+      cost_coeffs.push_back(coeffs(i));
+    }
+  }
+
+  auto constraint = createCartesianPositionConstraint(
+      var,
+      manip,
+      source_frame,
+      target_frame,
+      source_frame_offset,
+      target_frame_offset,
+      Eigen::Map<Eigen::VectorXd>(constraint_coeffs.data(), static_cast<Eigen::Index>(constraint_coeffs.size())));
+
+  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::SQUARED);
+  return true;
+}
+
+bool addCartesianPositionAbsoluteCost(trajopt_sqp::QPProblem& nlp,
+                                      const trajopt_ifopt::JointPosition::ConstPtr& var,
+                                      const tesseract_kinematics::JointGroup::ConstPtr& manip,
+                                      const std::string& source_frame,
+                                      const std::string& target_frame,
+                                      const Eigen::Isometry3d& source_frame_offset,
+                                      const Eigen::Isometry3d& target_frame_offset,
+                                      const Eigen::Ref<const Eigen::VectorXd>& coeffs)
+{
+  std::vector<double> constraint_coeffs;
+  std::vector<double> cost_coeffs;
+  for (Eigen::Index i = 0; i < coeffs.rows(); ++i)  // NOLINT
+  {
+    if (tesseract_common::almostEqualRelativeAndAbs(coeffs(i), 0.0))
+    {
+      constraint_coeffs.push_back(0);
+    }
+    else
+    {
+      constraint_coeffs.push_back(1);
+      cost_coeffs.push_back(coeffs(i));
+    }
+  }
+
+  auto constraint = createCartesianPositionConstraint(
+      var,
+      manip,
+      source_frame,
+      target_frame,
+      source_frame_offset,
+      target_frame_offset,
+      Eigen::Map<Eigen::VectorXd>(constraint_coeffs.data(), static_cast<Eigen::Index>(constraint_coeffs.size())));
+
+  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::ABSOLUTE);
+  return true;
+}
+
+ifopt::ConstraintSet::Ptr createJointPositionConstraint(const JointWaypointPoly& joint_waypoint,
+                                                        const trajopt_ifopt::JointPosition::ConstPtr& var,
+                                                        const Eigen::VectorXd& coeffs)
+{
+  assert(var);
+  std::vector<trajopt_ifopt::JointPosition::ConstPtr> vars(1, var);
+
+  ifopt::ConstraintSet::Ptr constraint;
+  if (!joint_waypoint.isToleranced())
+  {
+    constraint = std::make_shared<trajopt_ifopt::JointPosConstraint>(
+        joint_waypoint.getPosition(), vars, coeffs, "JointPos_" + var->GetName());
+  }
+  else
+  {
+    Eigen::VectorXd lower_limit = joint_waypoint.getPosition() + joint_waypoint.getLowerTolerance();
+    Eigen::VectorXd upper_limit = joint_waypoint.getPosition() + joint_waypoint.getUpperTolerance();
+    auto bounds = trajopt_ifopt::toBounds(lower_limit, upper_limit);
+    constraint =
+        std::make_shared<trajopt_ifopt::JointPosConstraint>(bounds, vars, coeffs, "JointPos_" + var->GetName());
+  }
+
+  return constraint;
+}
+
 std::vector<ifopt::ConstraintSet::Ptr>
-createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                           const std::shared_ptr<const tesseract_environment::Environment>& env,
+createCollisionConstraints(const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                           const tesseract_environment::Environment::ConstPtr& env,
                            const tesseract_common::ManipulatorInfo& manip_info,
-                           const std::shared_ptr<const trajopt_common::TrajOptCollisionConfig>& config,
+                           const trajopt_common::TrajOptCollisionConfig::ConstPtr& config,
                            const std::vector<int>& fixed_indices,
                            bool fixed_sparsity)
 {
@@ -130,8 +190,8 @@ createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt
     return constraints;
 
   // Add a collision cost for all steps
-  auto collision_cache = std::make_shared<trajopt_ifopt::CollisionCache>(vars.size());
-  std::unordered_map<std::string, std::shared_ptr<const tesseract_kinematics::JointGroup>> manipulators;
+  auto collision_cache = std::make_shared<trajopt_common::CollisionCache>(vars.size());
+  std::unordered_map<std::string, tesseract_kinematics::JointGroup::ConstPtr> manipulators;
   if (config->type == tesseract_collision::CollisionEvaluatorType::DISCRETE)
   {
     for (std::size_t i = 0; i < vars.size(); ++i)
@@ -139,7 +199,7 @@ createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt
       if (std::find(fixed_indices.begin(), fixed_indices.end(), i) != fixed_indices.end())
         continue;
 
-      std::shared_ptr<const tesseract_kinematics::JointGroup> manip;
+      tesseract_kinematics::JointGroup::ConstPtr manip;
       auto it = manipulators.find(manip_info.manipulator);
       if (it != manipulators.end())
       {
@@ -174,7 +234,7 @@ createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt
     {
       bool time1_fixed = (std::find(fixed_indices.begin(), fixed_indices.end(), i) != fixed_indices.end());
 
-      std::shared_ptr<const tesseract_kinematics::JointGroup> manip;
+      tesseract_kinematics::JointGroup::ConstPtr manip;
       auto it = manipulators.find(manip_info.manipulator);
       if (it != manipulators.end())
       {
@@ -221,7 +281,7 @@ createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt
     {
       bool time1_fixed = (std::find(fixed_indices.begin(), fixed_indices.end(), i) != fixed_indices.end());
 
-      std::shared_ptr<const tesseract_kinematics::JointGroup> manip;
+      tesseract_kinematics::JointGroup::ConstPtr manip;
       auto it = manipulators.find(manip_info.manipulator);
       if (it != manipulators.end())
       {
@@ -258,35 +318,37 @@ createCollisionConstraints(const std::vector<std::shared_ptr<const trajopt_ifopt
   return constraints;
 }
 
-ifopt::ConstraintSet::Ptr createJointPositionConstraint(const JointWaypointPoly& joint_waypoint,
-                                                        const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                                        const Eigen::VectorXd& coeffs)
+bool addCollisionConstraint(trajopt_sqp::QPProblem& nlp,
+                            const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                            const tesseract_environment::Environment::ConstPtr& env,
+                            const tesseract_common::ManipulatorInfo& manip_info,
+                            const trajopt_common::TrajOptCollisionConfig::ConstPtr& config,
+                            const std::vector<int>& fixed_indices)
 {
-  assert(var);
-  std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>> vars(1, var);
-
-  ifopt::ConstraintSet::Ptr constraint;
-  if (!joint_waypoint.isToleranced())
-  {
-    constraint = std::make_shared<trajopt_ifopt::JointPosConstraint>(
-        joint_waypoint.getPosition(), vars, coeffs, "JointPos_" + var->GetName());
-  }
-  else
-  {
-    Eigen::VectorXd lower_limit = joint_waypoint.getPosition() + joint_waypoint.getLowerTolerance();
-    Eigen::VectorXd upper_limit = joint_waypoint.getPosition() + joint_waypoint.getUpperTolerance();
-    auto bounds = trajopt_ifopt::toBounds(lower_limit, upper_limit);
-    constraint =
-        std::make_shared<trajopt_ifopt::JointPosConstraint>(bounds, vars, coeffs, "JointPos_" + var->GetName());
-  }
-
-  return constraint;
+  auto constraints = createCollisionConstraints(vars, env, manip_info, config, fixed_indices);
+  for (auto& constraint : constraints)
+    nlp.addConstraintSet(constraint);
+  return true;
 }
 
-ifopt::ConstraintSet::Ptr
-createJointVelocityConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
-                              const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                              const Eigen::VectorXd& coeffs)
+bool addCollisionCost(trajopt_sqp::QPProblem& nlp,
+                      const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                      const tesseract_environment::Environment::ConstPtr& env,
+                      const tesseract_common::ManipulatorInfo& manip_info,
+                      const trajopt_common::TrajOptCollisionConfig::ConstPtr& config,
+                      const std::vector<int>& fixed_indices)
+{
+  // Coefficients are applied within the constraint
+  auto constraints = createCollisionConstraints(vars, env, manip_info, config, fixed_indices);
+  for (auto& constraint : constraints)
+    nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::HINGE);
+
+  return true;
+}
+
+ifopt::ConstraintSet::Ptr createJointVelocityConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
+                                                        const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                                                        const Eigen::VectorXd& coeffs)
 
 {
   assert(!vars.empty());
@@ -294,177 +356,8 @@ createJointVelocityConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
   return vel_constraint;
 }
 
-ifopt::ConstraintSet::Ptr
-createJointAccelerationConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
-                                  const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                                  const Eigen::VectorXd& coeffs)
-
-{
-  assert(!vars.empty());
-  auto accel_constraint =
-      std::make_shared<trajopt_ifopt::JointAccelConstraint>(target, vars, coeffs, "JointAcceleration");
-  return accel_constraint;
-}
-
-ifopt::ConstraintSet::Ptr
-createJointJerkConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
-                          const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                          const Eigen::VectorXd& coeffs)
-
-{
-  assert(!vars.empty());
-  auto jerk_constraint = std::make_shared<trajopt_ifopt::JointJerkConstraint>(target, vars, coeffs, "JointJerk");
-  return jerk_constraint;
-}
-
-bool addCartesianPositionConstraint(trajopt_sqp::QPProblem& nlp,
-                                    const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                    const std::shared_ptr<const tesseract_kinematics::JointGroup>& manip,
-                                    const std::string& source_frame,
-                                    const std::string& target_frame,
-                                    const Eigen::Isometry3d& source_frame_offset,
-                                    const Eigen::Isometry3d& target_frame_offset,
-                                    const Eigen::Ref<const Eigen::VectorXd>& coeffs)
-{
-  auto constraint = createCartesianPositionConstraint(
-      var, manip, source_frame, target_frame, source_frame_offset, target_frame_offset, coeffs);
-  nlp.addConstraintSet(constraint);
-  return true;
-}
-
-bool addCartesianPositionSquaredCost(trajopt_sqp::QPProblem& nlp,
-                                     const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                     const std::shared_ptr<const tesseract_kinematics::JointGroup>& manip,
-                                     const std::string& source_frame,
-                                     const std::string& target_frame,
-                                     const Eigen::Isometry3d& source_frame_offset,
-                                     const Eigen::Isometry3d& target_frame_offset,
-                                     const Eigen::Ref<const Eigen::VectorXd>& coeffs)
-{
-  std::vector<double> constraint_coeffs;
-  std::vector<double> cost_coeffs;
-  for (Eigen::Index i = 0; i < coeffs.rows(); ++i)
-  {
-    if (tesseract_common::almostEqualRelativeAndAbs(coeffs(i), 0.0))
-    {
-      constraint_coeffs.push_back(0);
-    }
-    else
-    {
-      constraint_coeffs.push_back(1);
-      cost_coeffs.push_back(coeffs(i));
-    }
-  }
-
-  auto constraint = createCartesianPositionConstraint(
-      var,
-      manip,
-      source_frame,
-      target_frame,
-      source_frame_offset,
-      target_frame_offset,
-      Eigen::Map<Eigen::VectorXd>(constraint_coeffs.data(), static_cast<Eigen::Index>(constraint_coeffs.size())));
-
-  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::SQUARED);
-  return true;
-}
-
-bool addCartesianPositionAbsoluteCost(trajopt_sqp::QPProblem& nlp,
-                                      const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                      const std::shared_ptr<const tesseract_kinematics::JointGroup>& manip,
-                                      const std::string& source_frame,
-                                      const std::string& target_frame,
-                                      const Eigen::Isometry3d& source_frame_offset,
-                                      const Eigen::Isometry3d& target_frame_offset,
-                                      const Eigen::Ref<const Eigen::VectorXd>& coeffs)
-{
-  std::vector<double> constraint_coeffs;
-  std::vector<double> cost_coeffs;
-  for (Eigen::Index i = 0; i < coeffs.rows(); ++i)  // NOLINT
-  {
-    if (tesseract_common::almostEqualRelativeAndAbs(coeffs(i), 0.0))
-    {
-      constraint_coeffs.push_back(0);
-    }
-    else
-    {
-      constraint_coeffs.push_back(1);
-      cost_coeffs.push_back(coeffs(i));
-    }
-  }
-
-  auto constraint = createCartesianPositionConstraint(
-      var,
-      manip,
-      source_frame,
-      target_frame,
-      source_frame_offset,
-      target_frame_offset,
-      Eigen::Map<Eigen::VectorXd>(constraint_coeffs.data(), static_cast<Eigen::Index>(constraint_coeffs.size())));
-
-  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::ABSOLUTE);
-  return true;
-}
-
-bool addJointPositionConstraint(trajopt_sqp::QPProblem& nlp,
-                                const JointWaypointPoly& joint_waypoint,
-                                const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                const Eigen::VectorXd& coeffs)
-{
-  auto constraint = createJointPositionConstraint(joint_waypoint, var, coeffs);
-  nlp.addConstraintSet(constraint);
-  return true;
-}
-
-bool addJointPositionSquaredCost(trajopt_sqp::QPProblem& nlp,
-                                 const JointWaypointPoly& joint_waypoint,
-                                 const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                 const Eigen::VectorXd& coeffs)
-{
-  auto constraint = createJointPositionConstraint(joint_waypoint, var, coeffs);
-  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::SQUARED);
-  return true;
-}
-bool addJointPositionAbsoluteCost(trajopt_sqp::QPProblem& nlp,
-                                  const JointWaypointPoly& joint_waypoint,
-                                  const std::shared_ptr<const trajopt_ifopt::JointPosition>& var,
-                                  const Eigen::VectorXd& coeffs)
-{
-  auto constraint = createJointPositionConstraint(joint_waypoint, var, coeffs);
-  nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::ABSOLUTE);
-  return true;
-}
-
-bool addCollisionConstraint(trajopt_sqp::QPProblem& nlp,
-                            const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                            const std::shared_ptr<const tesseract_environment::Environment>& env,
-                            const tesseract_common::ManipulatorInfo& manip_info,
-                            const std::shared_ptr<const trajopt_common::TrajOptCollisionConfig>& config,
-                            const std::vector<int>& fixed_indices)
-{
-  auto constraints = createCollisionConstraints(vars, env, manip_info, config, fixed_indices, false);
-  for (auto& constraint : constraints)
-    nlp.addConstraintSet(constraint);
-  return true;
-}
-
-bool addCollisionCost(trajopt_sqp::QPProblem& nlp,
-                      const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
-                      const std::shared_ptr<const tesseract_environment::Environment>& env,
-                      const tesseract_common::ManipulatorInfo& manip_info,
-                      const std::shared_ptr<const trajopt_common::TrajOptCollisionConfig>& config,
-                      const std::vector<int>& fixed_indices)
-{
-  // Coefficients are applied within the constraint
-  auto constraints = createCollisionConstraints(vars, env, manip_info, config, fixed_indices, false);
-  for (auto& constraint : constraints)
-    nlp.addCostSet(constraint, trajopt_sqp::CostPenaltyType::HINGE);
-
-  return true;
-}
-
 bool addJointVelocityConstraint(trajopt_sqp::QPProblem& nlp,
-                                const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                                const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                                 const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())
@@ -477,7 +370,7 @@ bool addJointVelocityConstraint(trajopt_sqp::QPProblem& nlp,
 }
 
 bool addJointVelocitySquaredCost(trajopt_sqp::QPProblem& nlp,
-                                 const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                                 const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                                  const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())
@@ -489,8 +382,20 @@ bool addJointVelocitySquaredCost(trajopt_sqp::QPProblem& nlp,
   return true;
 }
 
+ifopt::ConstraintSet::Ptr
+createJointAccelerationConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
+                                  const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                                  const Eigen::VectorXd& coeffs)
+
+{
+  assert(!vars.empty());
+  auto accel_constraint =
+      std::make_shared<trajopt_ifopt::JointAccelConstraint>(target, vars, coeffs, "JointAcceleration");
+  return accel_constraint;
+}
+
 bool addJointAccelerationConstraint(trajopt_sqp::QPProblem& nlp,
-                                    const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                                    const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                                     const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())
@@ -503,7 +408,7 @@ bool addJointAccelerationConstraint(trajopt_sqp::QPProblem& nlp,
 }
 
 bool addJointAccelerationSquaredCost(trajopt_sqp::QPProblem& nlp,
-                                     const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                                     const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                                      const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())
@@ -515,8 +420,18 @@ bool addJointAccelerationSquaredCost(trajopt_sqp::QPProblem& nlp,
   return true;
 }
 
+ifopt::ConstraintSet::Ptr createJointJerkConstraint(const Eigen::Ref<const Eigen::VectorXd>& target,
+                                                    const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
+                                                    const Eigen::VectorXd& coeffs)
+
+{
+  assert(!vars.empty());
+  auto jerk_constraint = std::make_shared<trajopt_ifopt::JointJerkConstraint>(target, vars, coeffs, "JointJerk");
+  return jerk_constraint;
+}
+
 bool addJointJerkConstraint(trajopt_sqp::QPProblem& nlp,
-                            const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                            const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                             const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())
@@ -529,7 +444,7 @@ bool addJointJerkConstraint(trajopt_sqp::QPProblem& nlp,
 }
 
 bool addJointJerkSquaredCost(trajopt_sqp::QPProblem& nlp,
-                             const std::vector<std::shared_ptr<const trajopt_ifopt::JointPosition>>& vars,
+                             const std::vector<trajopt_ifopt::JointPosition::ConstPtr>& vars,
                              const Eigen::Ref<const Eigen::VectorXd>& coeff)
 {
   if (vars.empty())

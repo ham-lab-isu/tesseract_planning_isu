@@ -27,44 +27,27 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <json/json.h>
 #include <console_bridge/console.h>
-#include <trajopt_common/collision_types.h>
-#include <trajopt/problem_description.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/glass_upright_example.h>
-
-#include <tesseract_scene_graph/link.h>
-#include <tesseract_scene_graph/joint.h>
-
-#include <tesseract_state_solver/state_solver.h>
-
-#include <tesseract_environment/environment.h>
-#include <tesseract_environment/commands/add_link_command.h>
 #include <tesseract_environment/utils.h>
-
 #include <tesseract_common/timer.h>
-
-#include <tesseract_command_language/profile_dictionary.h>
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/state_waypoint.h>
 #include <tesseract_command_language/cartesian_waypoint.h>
 #include <tesseract_command_language/joint_waypoint.h>
 #include <tesseract_command_language/move_instruction.h>
 #include <tesseract_command_language/utils.h>
-
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 #include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-#include <tesseract_task_composer/core/task_composer_node.h>
-#include <tesseract_task_composer/core/task_composer_executor.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
 #include <tesseract_task_composer/core/task_composer_plugin_factory.h>
-
-#include <tesseract_visualization/visualization.h>
 #include <tesseract_visualization/markers/toolpath_marker.h>
 
 #include <tesseract_motion_planners/core/utils.h>
+
 #include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_composite_profile.h>
+
 #include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_plan_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_plan_profile.h>
 
@@ -83,15 +66,15 @@ static const std::string TRAJOPT_DEFAULT_NAMESPACE = "TrajOptMotionPlannerTask";
 
 namespace tesseract_examples
 {
-GlassUprightExample::GlassUprightExample(std::shared_ptr<tesseract_environment::Environment> env,
-                                         std::shared_ptr<tesseract_visualization::Visualization> plotter,
+GlassUprightExample::GlassUprightExample(tesseract_environment::Environment::Ptr env,
+                                         tesseract_visualization::Visualization::Ptr plotter,
                                          bool ifopt,
                                          bool debug)
   : Example(std::move(env), std::move(plotter)), ifopt_(ifopt), debug_(debug)
 {
 }
 
-inline tesseract_environment::Command::Ptr addSphere()
+tesseract_environment::Command::Ptr GlassUprightExample::addSphere()
 {
   // Add sphere to environment
   Link link_sphere("sphere_attached");
@@ -157,8 +140,6 @@ bool GlassUprightExample::run()
 
   if (debug_)
     console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG);
-  else
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_INFO);
 
   // Solve Trajectory
   CONSOLE_BRIDGE_logInform("glass upright plan example");
@@ -210,7 +191,6 @@ bool GlassUprightExample::run()
     composite_profile->smooth_accelerations = false;
     composite_profile->smooth_jerks = false;
     composite_profile->velocity_coeff = Eigen::VectorXd::Ones(1);
-    composite_profile->acceleration_coeff = Eigen::VectorXd::Ones(1);
     profiles->addProfile<TrajOptIfoptCompositeProfile>(TRAJOPT_IFOPT_DEFAULT_NAMESPACE, "UPRIGHT", composite_profile);
 
     auto plan_profile = std::make_shared<TrajOptIfoptDefaultPlanProfile>();
@@ -238,16 +218,13 @@ bool GlassUprightExample::run()
     composite_profile->smooth_accelerations = false;
     composite_profile->smooth_jerks = false;
     composite_profile->velocity_coeff = Eigen::VectorXd::Ones(1);
-    composite_profile->acceleration_coeff = Eigen::VectorXd::Ones(1);
     profiles->addProfile<TrajOptCompositeProfile>(TRAJOPT_DEFAULT_NAMESPACE, "UPRIGHT", composite_profile);
 
     auto plan_profile = std::make_shared<TrajOptDefaultPlanProfile>();
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->cartesian_constraint_config.coeff = Eigen::VectorXd::Constant(6, 1, 5);
-    plan_profile->cartesian_constraint_config.coeff(0) = 0;
-    plan_profile->cartesian_constraint_config.coeff(1) = 0;
-    plan_profile->cartesian_constraint_config.coeff(2) = 0;
+    plan_profile->cartesian_coeff = Eigen::VectorXd::Constant(6, 1, 5);
+    plan_profile->cartesian_coeff(0) = 0;
+    plan_profile->cartesian_coeff(1) = 0;
+    plan_profile->cartesian_coeff(2) = 0;
 
     // Add profile to Dictionary
     profiles->addProfile<TrajOptPlanProfile>(TRAJOPT_DEFAULT_NAMESPACE, "UPRIGHT", plan_profile);
@@ -256,13 +233,11 @@ bool GlassUprightExample::run()
   // Create task
   const std::string task_name = (ifopt_) ? "TrajOptIfoptPipeline" : "TrajOptPipeline";
   TaskComposerNode::UPtr task = factory.createTaskComposerNode(task_name);
-  const std::string output_key = task->getOutputKeys().get("program");
+  const std::string output_key = task->getOutputKeys().front();
 
-  // Create Task Composer Data Storage
-  auto data = std::make_unique<tesseract_planning::TaskComposerDataStorage>();
-  data->setData("planning_input", program);
-  data->setData("environment", std::shared_ptr<const tesseract_environment::Environment>(env_));
-  data->setData("profiles", profiles);
+  // Create Task Composer Problem
+  auto problem = std::make_unique<PlanningTaskComposerProblem>(env_, profiles);
+  problem->input = program;
 
   if (plotter_ != nullptr && plotter_->isConnected())
     plotter_->waitForInput("Hit Enter to solve for trajectory.");
@@ -270,7 +245,7 @@ bool GlassUprightExample::run()
   // Solve process plan
   tesseract_common::Timer stopwatch;
   stopwatch.start();
-  TaskComposerFuture::UPtr future = executor->run(*task, std::move(data));
+  TaskComposerFuture::UPtr future = executor->run(*task, std::move(problem));
   future->wait();
 
   stopwatch.stop();

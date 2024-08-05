@@ -24,16 +24,7 @@
  * limitations under the License.
  */
 
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <console_bridge/console.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
 #include <tesseract_motion_planners/core/planner.h>
-#include <tesseract_motion_planners/core/types.h>
-
-#include <tesseract_common/joint_state.h>
-#include <tesseract_command_language/poly/move_instruction_poly.h>
 
 namespace tesseract_planning
 {
@@ -47,24 +38,16 @@ const std::string& MotionPlanner::getName() const { return name_; }
 
 bool MotionPlanner::checkRequest(const PlannerRequest& request)
 {
-  std::string reason;
-  return checkRequest(request, reason);
-}
-
-bool MotionPlanner::checkRequest(const PlannerRequest& request, std::string& reason)
-{
   // Check that parameters are valid
   if (request.env == nullptr)
   {
-    reason = "PlannerRequest environment is nullptr";
-    CONSOLE_BRIDGE_logError(reason.c_str());
+    CONSOLE_BRIDGE_logError("In TrajOptPlannerUniversalConfig: tesseract is a required parameter and has not been set");
     return false;
   }
 
   if (request.instructions.empty())
   {
-    reason = "PlannerRequest instruction is empty";
-    CONSOLE_BRIDGE_logError(reason.c_str());
+    CONSOLE_BRIDGE_logError("TrajOptPlannerUniversalConfig requires at least one instruction");
     return false;
   }
 

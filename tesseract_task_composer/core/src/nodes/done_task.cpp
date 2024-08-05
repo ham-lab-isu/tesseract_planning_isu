@@ -27,34 +27,27 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-#include <yaml-cpp/yaml.h>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/nodes/done_task.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
 
 namespace tesseract_planning
 {
-DoneTask::DoneTask() : DoneTask("DoneTask", false) {}
-DoneTask::DoneTask(std::string name, bool is_conditional)
-  : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, is_conditional)
-{
-}
+DoneTask::DoneTask() : TaskComposerTask("DoneTask", false) {}
+DoneTask::DoneTask(std::string name, bool is_conditional) : TaskComposerTask(std::move(name), is_conditional) {}
 DoneTask::DoneTask(std::string name, const YAML::Node& config, const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), TaskComposerNodePorts{}, config)
+  : TaskComposerTask(std::move(name), config)
 {
 }
 
-std::unique_ptr<TaskComposerNodeInfo> DoneTask::runImpl(TaskComposerContext& /*context*/,
-                                                        OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr DoneTask::runImpl(TaskComposerContext& /*context*/,
+                                             OptionalTaskComposerExecutor /*executor*/) const
 {
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->color = "green";
   info->return_value = 1;
-  info->status_code = 1;
-  info->status_message = "Successful";
-  CONSOLE_BRIDGE_logDebug("%s", info->status_message.c_str());
+  info->message = "Successful";
+  CONSOLE_BRIDGE_logDebug("%s", info->message.c_str());
   return info;
 }
 
@@ -69,5 +62,6 @@ void DoneTask::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DoneTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::DoneTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DoneTask)

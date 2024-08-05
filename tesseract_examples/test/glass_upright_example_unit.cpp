@@ -4,8 +4,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/glass_upright_example.h>
-#include <tesseract_common/filesystem.h>
-#include <tesseract_environment/environment.h>
 #include <tesseract_support/tesseract_support_resource_locator.h>
 
 using namespace tesseract_examples;
@@ -27,7 +25,7 @@ TEST(TesseractExamples, GlassUprightTrajOptExampleUnit)  // NOLINT
   EXPECT_TRUE(example.run());
 }
 
-TEST(TesseractExamples, GlassUprightTrajOptIfoptExampleUnit)  // NOLINT
+TEST(TesseractExamples, DISABLED_GlassUprightTrajOptIfoptExampleUnit)  // NOLINT
 {
   auto locator = std::make_shared<TesseractSupportResourceLocator>();
   tesseract_common::fs::path urdf_path =

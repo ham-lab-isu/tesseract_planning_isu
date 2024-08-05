@@ -25,31 +25,15 @@
  */
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
+#include <memory>
 #include <console_bridge/console.h>
-#include <trajopt_common/collision_types.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/car_seat_example.h>
-
-#include <tesseract_common/allowed_collision_matrix.h>
-
 #include <tesseract_collision/bullet/convex_hull_utils.h>
-
-#include <tesseract_kinematics/core/joint_group.h>
-
-#include <tesseract_scene_graph/link.h>
-#include <tesseract_scene_graph/joint.h>
-
-#include <tesseract_state_solver/state_solver.h>
-
-#include <tesseract_environment/environment.h>
 #include <tesseract_environment/utils.h>
-#include <tesseract_environment/commands/add_link_command.h>
-#include <tesseract_environment/commands/move_link_command.h>
-#include <tesseract_environment/commands/modify_allowed_collisions_command.h>
-
+#include <tesseract_environment/commands.h>
 #include <tesseract_geometry/mesh_parser.h>
-
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/state_waypoint.h>
 #include <tesseract_command_language/cartesian_waypoint.h>
@@ -57,22 +41,13 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_command_language/move_instruction.h>
 #include <tesseract_command_language/profile_dictionary.h>
 #include <tesseract_command_language/utils.h>
-
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 #include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
-#include <tesseract_task_composer/core/task_composer_executor.h>
-#include <tesseract_task_composer/core/task_composer_node.h>
 #include <tesseract_task_composer/core/task_composer_plugin_factory.h>
 
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_solver_profile.h>
-#include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_composite_profile.h>
-#include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_plan_profile.h>
-#include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_solver_profile.h>
 #include <tesseract_motion_planners/core/utils.h>
-
-#include <tesseract_visualization/visualization.h>
 #include <tesseract_visualization/markers/toolpath_marker.h>
 
 using namespace tesseract_environment;
@@ -83,7 +58,6 @@ using namespace tesseract_visualization;
 using namespace tesseract_planning;
 using tesseract_common::ManipulatorInfo;
 
-static const std::string TRAJOPT_IFOPT_DEFAULT_NAMESPACE = "TrajOptIfoptMotionPlannerTask";
 static const std::string TRAJOPT_DEFAULT_NAMESPACE = "TrajOptMotionPlannerTask";
 namespace tesseract_examples
 {
@@ -137,15 +111,13 @@ Commands addSeats(const tesseract_common::ResourceLocator::ConstPtr& locator)
   return cmds;
 }
 
-CarSeatExample::CarSeatExample(std::shared_ptr<tesseract_environment::Environment> env,
-                               std::shared_ptr<tesseract_visualization::Visualization> plotter,
-                               bool ifopt,
-                               bool debug)
-  : Example(std::move(env), std::move(plotter)), ifopt_(ifopt), debug_(debug)
+CarSeatExample::CarSeatExample(tesseract_environment::Environment::Ptr env,
+                               tesseract_visualization::Visualization::Ptr plotter)
+  : Example(std::move(env), std::move(plotter))
 {
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, double>> getPredefinedPosition()
+std::unordered_map<std::string, std::unordered_map<std::string, double>> CarSeatExample::getPredefinedPosition()
 {
   std::unordered_map<std::string, std::unordered_map<std::string, double>> result;
 
@@ -218,7 +190,8 @@ std::unordered_map<std::string, std::unordered_map<std::string, double>> getPred
   return result;
 }
 
-std::vector<double> getPositionVector(const JointGroup& joint_group, const std::unordered_map<std::string, double>& pos)
+std::vector<double> CarSeatExample::getPositionVector(const JointGroup& joint_group,
+                                                      const std::unordered_map<std::string, double>& pos)
 {
   std::vector<double> result;
   result.reserve(static_cast<std::size_t>(joint_group.numJoints()));
@@ -228,7 +201,8 @@ std::vector<double> getPositionVector(const JointGroup& joint_group, const std::
   return result;
 }
 
-Eigen::VectorXd getPositionVectorXd(const JointGroup& joint_group, const std::unordered_map<std::string, double>& pos)
+Eigen::VectorXd CarSeatExample::getPositionVectorXd(const JointGroup& joint_group,
+                                                    const std::unordered_map<std::string, double>& pos)
 {
   Eigen::VectorXd result;
   result.resize(joint_group.numJoints());
@@ -241,10 +215,7 @@ Eigen::VectorXd getPositionVectorXd(const JointGroup& joint_group, const std::un
 
 bool CarSeatExample::run()
 {
-  if (debug_)
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG);
-  else
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_INFO);
+  console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG);
 
   // Create Task Composer Plugin Factory
   const std::string share_dir(TESSERACT_TASK_COMPOSER_DIR);
@@ -274,70 +245,25 @@ bool CarSeatExample::run()
   // Create Executor
   auto executor = factory.createTaskComposerExecutor("TaskflowExecutor");
 
+  // Create TrajOpt Profile
+  auto trajopt_composite_profile = std::make_shared<TrajOptDefaultCompositeProfile>();
+  trajopt_composite_profile->collision_constraint_config.enabled = true;
+  trajopt_composite_profile->collision_constraint_config.safety_margin = 0.00;
+  trajopt_composite_profile->collision_constraint_config.safety_margin_buffer = 0.005;
+  trajopt_composite_profile->collision_constraint_config.coeff = 10;
+  trajopt_composite_profile->collision_cost_config.safety_margin = 0.005;
+  trajopt_composite_profile->collision_cost_config.safety_margin_buffer = 0.01;
+  trajopt_composite_profile->collision_cost_config.coeff = 50;
+
+  auto trajopt_solver_profile = std::make_shared<TrajOptDefaultSolverProfile>();
+  trajopt_solver_profile->opt_info.max_iter = 200;
+  trajopt_solver_profile->opt_info.min_approx_improve = 1e-3;
+  trajopt_solver_profile->opt_info.min_trust_box_size = 1e-3;
+
   // Create profile dictionary
   auto profiles = std::make_shared<ProfileDictionary>();
-  if (ifopt_)
-  {
-    // Create TrajOpt_Ifopt Profile
-    auto trajopt_ifopt_composite_profile = std::make_shared<TrajOptIfoptDefaultCompositeProfile>();
-    trajopt_ifopt_composite_profile->collision_constraint_config->type =
-        tesseract_collision::CollisionEvaluatorType::LVS_CONTINUOUS;
-    trajopt_ifopt_composite_profile->collision_constraint_config->contact_manager_config =
-        tesseract_collision::ContactManagerConfig(0.00);
-    trajopt_ifopt_composite_profile->collision_constraint_config->collision_margin_buffer = 0.005;
-    trajopt_ifopt_composite_profile->collision_constraint_config->collision_coeff_data =
-        trajopt_common::CollisionCoeffData(1);
-    trajopt_ifopt_composite_profile->collision_cost_config->type =
-        tesseract_collision::CollisionEvaluatorType::LVS_CONTINUOUS;
-    trajopt_ifopt_composite_profile->collision_cost_config->contact_manager_config =
-        tesseract_collision::ContactManagerConfig(0.005);
-    trajopt_ifopt_composite_profile->collision_cost_config->collision_margin_buffer = 0.01;
-    trajopt_ifopt_composite_profile->collision_cost_config->collision_coeff_data =
-        trajopt_common::CollisionCoeffData(50);
-    trajopt_ifopt_composite_profile->smooth_velocities = false;
-    trajopt_ifopt_composite_profile->velocity_coeff = Eigen::VectorXd::Ones(1);
-    trajopt_ifopt_composite_profile->smooth_accelerations = true;
-    trajopt_ifopt_composite_profile->acceleration_coeff = Eigen::VectorXd::Ones(1);
-    trajopt_ifopt_composite_profile->smooth_jerks = true;
-    trajopt_ifopt_composite_profile->jerk_coeff = Eigen::VectorXd::Ones(1);
-    trajopt_ifopt_composite_profile->longest_valid_segment_length = 0.1;
-
-    auto trajopt_ifopt_plan_profile = std::make_shared<TrajOptIfoptDefaultPlanProfile>();
-    trajopt_ifopt_plan_profile->cartesian_coeff = Eigen::VectorXd::Ones(6);
-    trajopt_ifopt_plan_profile->joint_coeff = Eigen::VectorXd::Ones(8);
-
-    auto trajopt_ifopt_solver_profile = std::make_shared<TrajOptIfoptDefaultSolverProfile>();
-    trajopt_ifopt_solver_profile->opt_info.max_iterations = 200;
-    trajopt_ifopt_solver_profile->opt_info.min_approx_improve = 1e-3;
-    trajopt_ifopt_solver_profile->opt_info.min_trust_box_size = 1e-3;
-
-    profiles->addProfile<TrajOptIfoptCompositeProfile>(
-        TRAJOPT_IFOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_ifopt_composite_profile);
-    profiles->addProfile<TrajOptIfoptPlanProfile>(
-        TRAJOPT_IFOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_ifopt_plan_profile);
-    profiles->addProfile<TrajOptIfoptSolverProfile>(
-        TRAJOPT_IFOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_ifopt_solver_profile);
-  }
-  else
-  {
-    // Create TrajOpt Profile
-    auto trajopt_composite_profile = std::make_shared<TrajOptDefaultCompositeProfile>();
-    trajopt_composite_profile->collision_constraint_config.enabled = true;
-    trajopt_composite_profile->collision_constraint_config.safety_margin = 0.00;
-    trajopt_composite_profile->collision_constraint_config.safety_margin_buffer = 0.005;
-    trajopt_composite_profile->collision_constraint_config.coeff = 10;
-    trajopt_composite_profile->collision_cost_config.safety_margin = 0.005;
-    trajopt_composite_profile->collision_cost_config.safety_margin_buffer = 0.01;
-    trajopt_composite_profile->collision_cost_config.coeff = 50;
-
-    auto trajopt_solver_profile = std::make_shared<TrajOptDefaultSolverProfile>();
-    trajopt_solver_profile->opt_info.max_iter = 200;
-    trajopt_solver_profile->opt_info.min_approx_improve = 1e-3;
-    trajopt_solver_profile->opt_info.min_trust_box_size = 1e-3;
-
-    profiles->addProfile<TrajOptCompositeProfile>(TRAJOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_composite_profile);
-    profiles->addProfile<TrajOptSolverProfile>(TRAJOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_solver_profile);
-  }
+  profiles->addProfile<TrajOptCompositeProfile>(TRAJOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_composite_profile);
+  profiles->addProfile<TrajOptSolverProfile>(TRAJOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_solver_profile);
 
   // Solve Trajectory
   CONSOLE_BRIDGE_logInform("Car Seat Demo Started");
@@ -371,18 +297,15 @@ bool CarSeatExample::run()
     CONSOLE_BRIDGE_logInform("Freespace plan to pick seat 1 example");
 
     // Create task
-    const std::string task_name = (ifopt_) ? "TrajOptIfoptPipeline" : "TrajOptPipeline";
-    TaskComposerNode::UPtr task = factory.createTaskComposerNode(task_name);
-    const std::string output_key = task->getOutputKeys().get("program");
+    TaskComposerNode::UPtr task = factory.createTaskComposerNode("TrajOptPipeline");
+    const std::string output_key = task->getOutputKeys().front();
 
-    // Create Task Composer Data Storage
-    auto data = std::make_unique<tesseract_planning::TaskComposerDataStorage>();
-    data->setData("planning_input", program);
-    data->setData("environment", std::shared_ptr<const tesseract_environment::Environment>(env_));
-    data->setData("profiles", profiles);
+    // Create Task Composer Problem
+    auto problem = std::make_unique<PlanningTaskComposerProblem>(env_, profiles);
+    problem->input = program;
 
     // Solve task
-    TaskComposerFuture::UPtr future = executor->run(*task, std::move(data));
+    TaskComposerFuture::UPtr future = executor->run(*task, std::move(problem));
     future->wait();
 
     if (!future->context->isSuccessful())
@@ -458,18 +381,15 @@ bool CarSeatExample::run()
     CONSOLE_BRIDGE_logInform("Freespace plan to pick seat 1 example");
 
     // Create task
-    const std::string task_name = (ifopt_) ? "TrajOptIfoptPipeline" : "TrajOptPipeline";
-    TaskComposerNode::UPtr task = factory.createTaskComposerNode(task_name);
-    const std::string output_key = task->getOutputKeys().get("program");
+    TaskComposerNode::UPtr task = factory.createTaskComposerNode("TrajOptPipeline");
+    const std::string output_key = task->getOutputKeys().front();
 
-    // Create Task Composer Data Storage
-    auto data = std::make_unique<tesseract_planning::TaskComposerDataStorage>();
-    data->setData("planning_input", program);
-    data->setData("environment", std::shared_ptr<const tesseract_environment::Environment>(env_));
-    data->setData("profiles", profiles);
+    // Create Task Composer Problem
+    auto problem = std::make_unique<PlanningTaskComposerProblem>(env_, profiles);
+    problem->input = program;
 
     // Solve task
-    TaskComposerFuture::UPtr future = executor->run(*task, std::move(data));
+    TaskComposerFuture::UPtr future = executor->run(*task, std::move(problem));
     future->wait();
 
     if (!future->context->isSuccessful())

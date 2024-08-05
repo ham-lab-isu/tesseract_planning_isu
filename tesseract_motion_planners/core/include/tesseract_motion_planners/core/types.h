@@ -1,5 +1,5 @@
 /**
- * @file types.h
+ * @file planner_types.h
  * @brief Planner types.
  *
  * @author Levi Armstrong
@@ -26,18 +26,9 @@
 #ifndef TESSERACT_MOTION_PLANNERS_PLANNER_TYPES_H
 #define TESSERACT_MOTION_PLANNERS_PLANNER_TYPES_H
 
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <Eigen/Core>
-#include <memory>
-#include <unordered_map>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
-#include <tesseract_common/fwd.h>
-#include <tesseract_environment/fwd.h>
-#include <tesseract_command_language/fwd.h>
-
-#include <tesseract_scene_graph/scene_state.h>
+#include <tesseract_environment/environment.h>
+#include <tesseract_common/types.h>
+#include <tesseract_command_language/poly/instruction_poly.h>
 #include <tesseract_command_language/composite_instruction.h>
 
 namespace tesseract_planning
@@ -57,19 +48,17 @@ struct PlannerRequest
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   // LCOV_EXCL_STOP
 
-  PlannerRequest();
-
   /** @brief The name of the process manager to use */
   std::string name;
 
   /** @brief The environment */
-  std::shared_ptr<const tesseract_environment::Environment> env;
+  tesseract_environment::Environment::ConstPtr env;
 
   /** @brief The start state to use for planning */
   tesseract_scene_graph::SceneState env_state;
 
   /** @brief The profile dictionary */
-  std::shared_ptr<const ProfileDictionary> profiles;
+  ProfileDictionary::ConstPtr profiles{ std::make_shared<ProfileDictionary>() };
 
   /**
    * @brief The program instruction
@@ -127,7 +116,7 @@ struct PlannerResponse
   std::shared_ptr<void> data;
 
   /** @brief This return true if successful */
-  explicit operator bool() const noexcept;
+  explicit operator bool() const noexcept { return successful; }
 };
 
 }  // namespace tesseract_planning

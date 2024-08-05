@@ -4,7 +4,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/move_instruction.h>
 #include <tesseract_command_language/state_waypoint.h>
 #include <tesseract_time_parameterization/ruckig/ruckig_trajectory_smoothing.h>
@@ -112,23 +111,12 @@ TEST(RuckigTrajectorySmoothingTest, RuckigTrajectorySmoothingSolve)  // NOLINT
 {
   IterativeSplineParameterization time_parameterization(false);
   CompositeInstruction program = createStraightTrajectory();
-
-  Eigen::MatrixX2d max_velocity(6, 2);
-  max_velocity.col(0) << -2.088, -2.082, -3.27, -3.6, -3.3, -3.078;
-  max_velocity.col(1) << 2.088, 2.082, 3.27, 3.6, 3.3, 3.078;
-  Eigen::MatrixX2d max_acceleration(6, 2);
-  max_acceleration.col(0) = -1 * Eigen::VectorXd::Ones(6);
-  max_acceleration.col(1) = Eigen::VectorXd::Ones(6);
-  Eigen::MatrixX2d max_jerk(6, 2);
-  max_jerk.col(0) = -1 * Eigen::VectorXd::Ones(6);
-  max_jerk.col(1) = Eigen::VectorXd::Ones(6);
-
+  std::vector<double> max_velocity = { 2.088, 2.082, 3.27, 3.6, 3.3, 3.078 };
+  std::vector<double> max_acceleration = { 1, 1, 1, 1, 1, 1 };
+  std::vector<double> max_jerk = { 1000, 1000, 1000, 1000, 1000, 1000 };
   TrajectoryContainer::Ptr trajectory = std::make_shared<InstructionsTrajectory>(program);
-  EXPECT_TRUE(time_parameterization.compute(*trajectory, max_velocity, max_acceleration, max_jerk));
+  EXPECT_TRUE(time_parameterization.compute(*trajectory, max_velocity, max_acceleration));
   ASSERT_LT(program.back().as<MoveInstructionPoly>().getWaypoint().as<StateWaypointPoly>().getTime(), 5.0);
-
-  max_jerk.col(0) << -1000, -1000, -1000, -1000, -1000, -1000;
-  max_jerk.col(1) << 1000, 1000, 1000, 1000, 1000, 1000;
 
   RuckigTrajectorySmoothing traj_smoothing;
   EXPECT_TRUE(traj_smoothing.compute(*trajectory, max_velocity, max_acceleration, max_jerk));
@@ -139,23 +127,12 @@ TEST(RuckigTrajectorySmoothingTest, RuckigTrajectorySmoothingRepeatedPointSolve)
 {
   IterativeSplineParameterization time_parameterization(true);
   CompositeInstruction program = createRepeatedPointTrajectory();
-
-  Eigen::MatrixX2d max_velocity(6, 2);
-  max_velocity.col(0) << -2.088, -2.082, -3.27, -3.6, -3.3, -3.078;
-  max_velocity.col(1) << 2.088, 2.082, 3.27, 3.6, 3.3, 3.078;
-  Eigen::MatrixX2d max_acceleration(6, 2);
-  max_acceleration.col(0) = -1 * Eigen::VectorXd::Ones(6);
-  max_acceleration.col(1) = Eigen::VectorXd::Ones(6);
-  Eigen::MatrixX2d max_jerk(6, 2);
-  max_jerk.col(0) = -1 * Eigen::VectorXd::Ones(6);
-  max_jerk.col(1) = Eigen::VectorXd::Ones(6);
-
+  std::vector<double> max_velocity = { 2.088, 2.082, 3.27, 3.6, 3.3, 3.078 };
+  std::vector<double> max_acceleration = { 1, 1, 1, 1, 1, 1 };
+  std::vector<double> max_jerk = { 1000, 1000, 1000, 1000, 1000, 1000 };
   TrajectoryContainer::Ptr trajectory = std::make_shared<InstructionsTrajectory>(program);
-  EXPECT_TRUE(time_parameterization.compute(*trajectory, max_velocity, max_acceleration, max_jerk));
+  EXPECT_TRUE(time_parameterization.compute(*trajectory, max_velocity, max_acceleration));
   ASSERT_LT(program.back().as<MoveInstructionPoly>().getWaypoint().as<StateWaypointPoly>().getTime(), 0.001);
-
-  max_jerk.col(0) << -1000, -1000, -1000, -1000, -1000, -1000;
-  max_jerk.col(1) << 1000, 1000, 1000, 1000, 1000, 1000;
 
   RuckigTrajectorySmoothing traj_smoothing;
   EXPECT_TRUE(traj_smoothing.compute(*trajectory, max_velocity, max_acceleration, max_jerk));

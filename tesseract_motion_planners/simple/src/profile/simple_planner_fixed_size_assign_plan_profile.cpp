@@ -26,15 +26,7 @@
 
 #include <tesseract_motion_planners/simple/profile/simple_planner_fixed_size_assign_plan_profile.h>
 #include <tesseract_motion_planners/simple/interpolation.h>
-#include <tesseract_motion_planners/core/types.h>
 #include <tesseract_motion_planners/core/utils.h>
-
-#include <tesseract_common/manipulator_info.h>
-#include <tesseract_common/kinematic_limits.h>
-
-#include <tesseract_kinematics/core/kinematic_group.h>
-
-#include <tesseract_command_language/poly/move_instruction_poly.h>
 
 namespace tesseract_planning
 {
@@ -88,7 +80,7 @@ SimplePlannerFixedSizeAssignPlanProfile::generate(const MoveInstructionPoly& pre
   else
   {
     Eigen::VectorXd seed = request.env_state.getJointValues(info2.manip->getJointNames());
-    tesseract_common::enforceLimits<double>(seed, info2.manip->getLimits().joint_limits);
+    tesseract_common::enforcePositionLimits<double>(seed, info2.manip->getLimits().joint_limits);
 
     if (info2.instruction.isLinear())
       states = seed.replicate(1, linear_steps + 1);
@@ -117,7 +109,7 @@ SimplePlannerFixedSizeAssignPlanProfile::generate(const MoveInstructionPoly& pre
     for (auto& pose : poses)
       pose = info2.working_frame_transform.inverse() * pose;
 
-    assert(static_cast<Eigen::Index>(poses.size()) == states.cols());
+    assert(poses.size() == states.cols());
     return getInterpolatedInstructions(poses, info2.manip->getJointNames(), states, info2.instruction);
   }
 

@@ -27,42 +27,24 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/planning/nodes/update_start_and_end_state_task.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-
 #include <tesseract_command_language/composite_instruction.h>
-#include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/poly/cartesian_waypoint_poly.h>
-#include <tesseract_command_language/poly/state_waypoint_poly.h>
-#include <tesseract_command_language/poly/joint_waypoint_poly.h>
 
 namespace tesseract_planning
 {
-// Requried
-const std::string UpdateStartAndEndStateTask::INPUT_PREVIOUS_PROGRAM_PORT = "previous_program";
-const std::string UpdateStartAndEndStateTask::INPUT_CURRENT_PROGRAM_PORT = "current_program";
-const std::string UpdateStartAndEndStateTask::INPUT_NEXT_PROGRAM_PORT = "next_program";
-const std::string UpdateStartAndEndStateTask::OUTPUT_PROGRAM_PORT = "program";
-
 UpdateStartAndEndStateTask::UpdateStartAndEndStateTask(std::string name,
                                                        std::string input_prev_key,
                                                        std::string input_next_key,
                                                        std::string output_key,
                                                        bool conditional)
-  : TaskComposerTask(std::move(name), UpdateStartAndEndStateTask::ports(), conditional)
+  : TaskComposerTask(std::move(name), conditional)
 {
-  input_keys_.add(INPUT_CURRENT_PROGRAM_PORT, uuid_str_);
-  input_keys_.add(INPUT_PREVIOUS_PROGRAM_PORT, std::move(input_prev_key));
-  input_keys_.add(INPUT_NEXT_PROGRAM_PORT, std::move(input_next_key));
-  output_keys_.add(OUTPUT_PROGRAM_PORT, std::move(output_key));
-  validatePorts();
+  input_keys_.push_back(uuid_str_);
+  input_keys_.push_back(std::move(input_prev_key));
+  input_keys_.push_back(std::move(input_next_key));
+  output_keys_.push_back(std::move(output_key));
 }
 
 UpdateStartAndEndStateTask::UpdateStartAndEndStateTask(std::string name,
@@ -71,60 +53,48 @@ UpdateStartAndEndStateTask::UpdateStartAndEndStateTask(std::string name,
                                                        std::string input_next_key,
                                                        std::string output_key,
                                                        bool conditional)
-  : TaskComposerTask(std::move(name), UpdateStartAndEndStateTask::ports(), conditional)
+  : TaskComposerTask(std::move(name), conditional)
 {
-  input_keys_.add(INPUT_CURRENT_PROGRAM_PORT, std::move(input_key));
-  input_keys_.add(INPUT_PREVIOUS_PROGRAM_PORT, std::move(input_prev_key));
-  input_keys_.add(INPUT_NEXT_PROGRAM_PORT, std::move(input_next_key));
-  output_keys_.add(OUTPUT_PROGRAM_PORT, std::move(output_key));
-  validatePorts();
+  input_keys_.push_back(std::move(input_key));
+  input_keys_.push_back(std::move(input_prev_key));
+  input_keys_.push_back(std::move(input_next_key));
+  output_keys_.push_back(std::move(output_key));
 }
 
-TaskComposerNodePorts UpdateStartAndEndStateTask::ports()
-{
-  TaskComposerNodePorts ports;
-  ports.input_required[INPUT_CURRENT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_PREVIOUS_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_NEXT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.output_required[OUTPUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  return ports;
-}
-
-std::unique_ptr<TaskComposerNodeInfo>
-UpdateStartAndEndStateTask::runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr UpdateStartAndEndStateTask::runImpl(TaskComposerContext& context,
+                                                               OptionalTaskComposerExecutor /*executor*/) const
 {
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
 
-  auto input_data_poly = getData(*context.data_storage, INPUT_CURRENT_PROGRAM_PORT);
-  auto input_prev_data_poly = getData(*context.data_storage, INPUT_PREVIOUS_PROGRAM_PORT);
-  auto input_next_data_poly = getData(*context.data_storage, INPUT_NEXT_PROGRAM_PORT);
+  auto input_data_poly = context.data_storage->getData(input_keys_[0]);
+  auto input_prev_data_poly = context.data_storage->getData(input_keys_[1]);
+  auto input_next_data_poly = context.data_storage->getData(input_keys_[2]);
 
   // --------------------
   // Check that inputs are valid
   // --------------------
-  if (input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  if (input_data_poly.isNull() || input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "UpdateStartAndEndStateTask: Input data for key '" +
-                           input_keys_.get(INPUT_CURRENT_PROGRAM_PORT) + "' must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message =
+        "UpdateStartAndEndStateTask: Input data for key '" + input_keys_[0] + "' must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
-  if (input_prev_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  if (input_prev_data_poly.isNull() || input_prev_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "UpdateStartAndEndStateTask: Input data for key '" +
-                           input_keys_.get(INPUT_PREVIOUS_PROGRAM_PORT) + "' must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message =
+        "UpdateStartAndEndStateTask: Input data for key '" + input_keys_[1] + "' must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
-  if (input_next_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  if (input_next_data_poly.isNull() || input_next_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "UpdateStartAndEndStateTask: Input data for key '" +
-                           input_keys_.get(INPUT_NEXT_PROGRAM_PORT) + "' must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message =
+        "UpdateStartAndEndStateTask: Input data for key '" + input_keys_[2] + "' must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
@@ -157,11 +127,10 @@ UpdateStartAndEndStateTask::runImpl(TaskComposerContext& context, OptionalTaskCo
     throw std::runtime_error("Invalid waypoint type");
 
   // Store results
-  setData(*context.data_storage, OUTPUT_PROGRAM_PORT, input_data_poly);
+  context.data_storage->setData(output_keys_[0], input_data_poly);
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Successful";
+  info->message = "Successful";
   info->return_value = 1;
   CONSOLE_BRIDGE_logDebug("UpdateStartAndEndStateTask succeeded");
   return info;
@@ -181,5 +150,6 @@ void UpdateStartAndEndStateTask::serialize(Archive& ar, const unsigned int /*ver
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::UpdateStartAndEndStateTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::UpdateStartAndEndStateTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::UpdateStartAndEndStateTask)

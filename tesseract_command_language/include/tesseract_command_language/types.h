@@ -1,9 +1,9 @@
 /**
- * @file profile_dictionary.cpp
- * @brief This is a profile dictionary for storing all profiles
+ * @file types.h
+ * @brief Contains common types used throughout command language
  *
  * @author Levi Armstrong
- * @date December 2, 2020
+ * @date July 22, 2020
  * @version TODO
  * @bug No known bugs
  *
@@ -23,26 +23,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef TESSERACT_COMMAND_LANGUAGE_TYPES_H
+#define TESSERACT_COMMAND_LANGUAGE_TYPES_H
 
-#include <tesseract_command_language/profile_dictionary.h>
-#include <boost/serialization/shared_ptr.hpp>
+#include <tesseract_common/manipulator_info.h>
 
 namespace tesseract_planning
 {
-void ProfileDictionary::clear()
-{
-  std::unique_lock lock(mutex_);
-  profiles_.clear();
-}
-
-template <class Archive>
-void ProfileDictionary::serialize(Archive& /*ar*/, const unsigned int /*version*/)
-{
-}
-
+using ManipulatorInfo = tesseract_common::ManipulatorInfo;
 }  // namespace tesseract_planning
 
-#include <tesseract_common/serialization.h>
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::ProfileDictionary)
-TESSERACT_ANY_EXPORT_IMPLEMENT(TesseractPlanningProfileDictionarySharedPtr)
-TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::ProfileDictionary)
+#endif  // TESSERACT_COMMAND_LANGUAGE_TYPES_H

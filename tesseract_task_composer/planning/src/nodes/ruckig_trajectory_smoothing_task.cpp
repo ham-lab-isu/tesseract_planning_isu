@@ -26,132 +26,84 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-
-#include <tesseract_common/serialization.h>
-
-#include <tesseract_environment/environment.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+#include <tesseract_motion_planners/planner_utils.h>
 #include <tesseract_task_composer/planning/nodes/ruckig_trajectory_smoothing_task.h>
 #include <tesseract_task_composer/planning/profiles/ruckig_trajectory_smoothing_profile.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/poly/move_instruction_poly.h>
-
-#include <tesseract_motion_planners/planner_utils.h>
-
 #include <tesseract_time_parameterization/core/instructions_trajectory.h>
 #include <tesseract_time_parameterization/ruckig/ruckig_trajectory_smoothing.h>
 
 namespace tesseract_planning
 {
-// Requried
-const std::string RuckigTrajectorySmoothingTask::INOUT_PROGRAM_PORT = "program";
-const std::string RuckigTrajectorySmoothingTask::INPUT_ENVIRONMENT_PORT = "environment";
-const std::string RuckigTrajectorySmoothingTask::INPUT_PROFILES_PORT = "profiles";
-
-// Optional
-const std::string RuckigTrajectorySmoothingTask::INPUT_MANIP_INFO_PORT = "manip_info";
-const std::string RuckigTrajectorySmoothingTask::INPUT_COMPOSITE_PROFILE_REMAPPING_PORT = "composite_profile_remapping";
-const std::string RuckigTrajectorySmoothingTask::INPUT_MOVE_PROFILE_REMAPPING_PORT = "move_profile_remapping";
-
-RuckigTrajectorySmoothingTask::RuckigTrajectorySmoothingTask()
-  : TaskComposerTask("RuckigTrajectorySmoothingTask", RuckigTrajectorySmoothingTask::ports(), true)
+RuckigTrajectorySmoothingTask::RuckigTrajectorySmoothingTask() : TaskComposerTask("RuckigTrajectorySmoothingTask", true)
 {
 }
 RuckigTrajectorySmoothingTask::RuckigTrajectorySmoothingTask(std::string name,
-                                                             std::string input_program_key,
-                                                             std::string input_environment_key,
-                                                             std::string input_profiles_key,
-                                                             std::string output_program_key,
+                                                             std::string input_key,
+                                                             std::string output_key,
                                                              bool is_conditional)
-  : TaskComposerTask(std::move(name), RuckigTrajectorySmoothingTask::ports(), is_conditional)
+  : TaskComposerTask(std::move(name), is_conditional)
 {
-  input_keys_.add(INOUT_PROGRAM_PORT, std::move(input_program_key));
-  input_keys_.add(INPUT_ENVIRONMENT_PORT, std::move(input_environment_key));
-  input_keys_.add(INPUT_PROFILES_PORT, std::move(input_profiles_key));
-  output_keys_.add(INOUT_PROGRAM_PORT, std::move(output_program_key));
-  validatePorts();
+  input_keys_.push_back(std::move(input_key));
+  output_keys_.push_back(std::move(output_key));
 }
 
 RuckigTrajectorySmoothingTask::RuckigTrajectorySmoothingTask(std::string name,
                                                              const YAML::Node& config,
                                                              const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), RuckigTrajectorySmoothingTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (input_keys_.empty())
+    throw std::runtime_error("RuckigTrajectorySmoothingTask, config missing 'inputs' entry");
+
+  if (input_keys_.size() > 1)
+    throw std::runtime_error("RuckigTrajectorySmoothingTask, config 'inputs' entry currently only supports one "
+                             "input key");
+
+  if (output_keys_.empty())
+    throw std::runtime_error("RuckigTrajectorySmoothingTask, config missing 'outputs' entry");
+
+  if (output_keys_.size() > 1)
+    throw std::runtime_error("RuckigTrajectorySmoothingTask, config 'outputs' entry currently only supports one "
+                             "output key");
 }
 
-TaskComposerNodePorts RuckigTrajectorySmoothingTask::ports()
+TaskComposerNodeInfo::UPtr RuckigTrajectorySmoothingTask::runImpl(TaskComposerContext& context,
+                                                                  OptionalTaskComposerExecutor /*executor*/) const
 {
-  TaskComposerNodePorts ports;
-  ports.input_required[INOUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_ENVIRONMENT_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_PROFILES_PORT] = TaskComposerNodePorts::SINGLE;
+  // Get the problem
+  auto& problem = dynamic_cast<PlanningTaskComposerProblem&>(*context.problem);
 
-  ports.input_optional[INPUT_MANIP_INFO_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_optional[INPUT_COMPOSITE_PROFILE_REMAPPING_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_optional[INPUT_MOVE_PROFILE_REMAPPING_PORT] = TaskComposerNodePorts::SINGLE;
-
-  ports.output_required[INOUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-
-  return ports;
-}
-
-std::unique_ptr<TaskComposerNodeInfo>
-RuckigTrajectorySmoothingTask::runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor /*executor*/) const
-{
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
 
   // --------------------
   // Check that inputs are valid
   // --------------------
-  auto env_poly = getData(*context.data_storage, INPUT_ENVIRONMENT_PORT);
-  if (env_poly.getType() != std::type_index(typeid(std::shared_ptr<const tesseract_environment::Environment>)))
+  auto input_data_poly = context.data_storage->getData(input_keys_[0]);
+  if (input_data_poly.isNull() || input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_code = 0;
-    info->status_message = "Input data '" + input_keys_.get(INPUT_ENVIRONMENT_PORT) + "' is not correct type";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
-    info->return_value = 0;
+    info->message = "Input results to ruckig trajectory smoothing must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
-
-  auto env = env_poly.as<std::shared_ptr<const tesseract_environment::Environment>>();
-
-  auto input_data_poly = getData(*context.data_storage, INOUT_PROGRAM_PORT);
-  if (input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
-  {
-    info->status_message = "Input results to ruckig trajectory smoothing must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
-    return info;
-  }
-
-  tesseract_common::AnyPoly original_input_data_poly{ input_data_poly };
-
-  tesseract_common::ManipulatorInfo input_manip_info;
-  auto manip_info_poly = getData(*context.data_storage, INPUT_MANIP_INFO_PORT, false);
-  if (!manip_info_poly.isNull())
-    input_manip_info = manip_info_poly.as<tesseract_common::ManipulatorInfo>();
 
   auto& ci = input_data_poly.as<CompositeInstruction>();
-  tesseract_common::ManipulatorInfo manip_info = ci.getManipulatorInfo().getCombined(input_manip_info);
-  auto joint_group = env->getJointGroup(manip_info.manipulator);
+  const tesseract_common::ManipulatorInfo& manip_info = ci.getManipulatorInfo();
+  auto joint_group = problem.env->getJointGroup(manip_info.manipulator);
   auto limits = joint_group->getLimits();
 
   // Get Composite Profile
-  auto profiles = getData(*context.data_storage, INPUT_PROFILES_PORT).as<std::shared_ptr<ProfileDictionary>>();
-  auto composite_profile_remapping_poly = getData(*context.data_storage, INPUT_COMPOSITE_PROFILE_REMAPPING_PORT, false);
-  auto move_profile_remapping_poly = getData(*context.data_storage, INPUT_MOVE_PROFILE_REMAPPING_PORT, false);
   std::string profile = ci.getProfile();
-  profile = getProfileString(ns_, profile, composite_profile_remapping_poly);
+  profile = getProfileString(name_, profile, problem.composite_profile_remapping);
   auto cur_composite_profile = getProfile<RuckigTrajectorySmoothingCompositeProfile>(
-      ns_, profile, *profiles, std::make_shared<RuckigTrajectorySmoothingCompositeProfile>());
-  cur_composite_profile = applyProfileOverrides(ns_, profile, cur_composite_profile, ci.getProfileOverrides());
+      name_, profile, *problem.profiles, std::make_shared<RuckigTrajectorySmoothingCompositeProfile>());
+  cur_composite_profile = applyProfileOverrides(name_, profile, cur_composite_profile, ci.getProfileOverrides());
 
   RuckigTrajectorySmoothing solver(cur_composite_profile->duration_extension_fraction,
                                    cur_composite_profile->max_duration_extension_factor);
@@ -162,14 +114,13 @@ RuckigTrajectorySmoothingTask::runImpl(TaskComposerContext& context, OptionalTas
   {
     // If the output key is not the same as the input key the output data should be assigned the input data for error
     // branching
-    if (output_keys_.get(INOUT_PROGRAM_PORT) != input_keys_.get(INOUT_PROGRAM_PORT))
-      setData(*context.data_storage, INOUT_PROGRAM_PORT, original_input_data_poly);
+    if (output_keys_[0] != input_keys_[0])
+      context.data_storage->setData(output_keys_[0], context.data_storage->getData(input_keys_[0]));
 
     info->color = "green";
-    info->status_code = 1;
-    info->status_message = "Ruckig trajectory smoothing found no MoveInstructions to process";
+    info->message = "Ruckig trajectory smoothing found no MoveInstructions to process";
     info->return_value = 1;
-    CONSOLE_BRIDGE_logWarn("%s", info->status_message.c_str());
+    CONSOLE_BRIDGE_logWarn("%s", info->message.c_str());
     return info;
   }
 
@@ -187,10 +138,10 @@ RuckigTrajectorySmoothingTask::runImpl(TaskComposerContext& context, OptionalTas
     std::string move_profile = mi.getProfile();
 
     // Check for remapping of the plan profile
-    move_profile = getProfileString(ns_, profile, move_profile_remapping_poly);
+    move_profile = getProfileString(name_, profile, problem.move_profile_remapping);
     auto cur_move_profile = getProfile<RuckigTrajectorySmoothingMoveProfile>(
-        ns_, move_profile, *profiles, std::make_shared<RuckigTrajectorySmoothingMoveProfile>());
-    //    cur_move_profile = applyProfileOverrides(ns_, profile, cur_move_profile, mi.profile_overrides);
+        name_, move_profile, *problem.profiles, std::make_shared<RuckigTrajectorySmoothingMoveProfile>());
+    //    cur_move_profile = applyProfileOverrides(name_, profile, cur_move_profile, mi.profile_overrides);
 
     // If there is a move profile associated with it, override the parameters
     if (cur_move_profile)
@@ -206,26 +157,25 @@ RuckigTrajectorySmoothingTask::runImpl(TaskComposerContext& context, OptionalTas
   if (!solver.compute(*trajectory,
                       limits.velocity_limits,
                       limits.acceleration_limits,
-                      limits.jerk_limits,  // Eigen::VectorXd::Constant(limits.velocity_limits.rows(), 1000)
+                      Eigen::VectorXd::Constant(limits.velocity_limits.rows(), 1000),
                       velocity_scaling_factors,
                       acceleration_scaling_factors,
                       jerk_scaling_factors))
   {
     // If the output key is not the same as the input key the output data should be assigned the input data for error
     // branching
-    if (output_keys_.get(INOUT_PROGRAM_PORT) != input_keys_.get(INOUT_PROGRAM_PORT))
-      setData(*context.data_storage, INOUT_PROGRAM_PORT, original_input_data_poly);
+    if (output_keys_[0] != input_keys_[0])
+      context.data_storage->setData(output_keys_[0], context.data_storage->getData(input_keys_[0]));
 
-    info->status_message = "Failed to perform ruckig trajectory smoothing for process input: %s" + ci.getDescription();
-    CONSOLE_BRIDGE_logInform("%s", info->status_message.c_str());
+    info->message = "Failed to perform ruckig trajectory smoothing for process input: %s" + ci.getDescription();
+    CONSOLE_BRIDGE_logInform("%s", info->message.c_str());
     return info;
   }
 
-  setData(*context.data_storage, INOUT_PROGRAM_PORT, input_data_poly);
+  context.data_storage->setData(output_keys_[0], input_data_poly);
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Successful";
+  info->message = "Successful";
   info->return_value = 1;
   CONSOLE_BRIDGE_logDebug("Ruckig trajectory smoothing succeeded");
   return info;
@@ -248,5 +198,6 @@ void RuckigTrajectorySmoothingTask::serialize(Archive& ar, const unsigned int /*
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::RuckigTrajectorySmoothingTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::RuckigTrajectorySmoothingTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::RuckigTrajectorySmoothingTask)

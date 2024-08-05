@@ -35,13 +35,13 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <memory>
 #include <console_bridge/console.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_time_parameterization/ruckig/ruckig_trajectory_smoothing.h>
-#include <tesseract_time_parameterization/core/trajectory_container.h>
 #include <tesseract_common/kinematic_limits.h>
+
+#include <memory>
 
 #include <ruckig/input_parameter.hpp>
 #include <ruckig/ruckig.hpp>
@@ -64,6 +64,66 @@ void RuckigTrajectorySmoothing::setDurationExtensionFraction(double duration_ext
 void RuckigTrajectorySmoothing::setMaxDurationExtensionFactor(double max_duration_extension_factor)
 {
   max_duration_extension_factor_ = max_duration_extension_factor;
+}
+
+bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
+                                        const double& max_velocity,
+                                        const double& max_acceleration,
+                                        const double& max_jerk,
+                                        double max_velocity_scaling_factor,
+                                        double max_acceleration_scaling_factor,
+                                        double max_jerk_scaling_factor) const
+{
+  // NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
+  return compute(trajectory,
+                 std::vector<double>(static_cast<std::size_t>(trajectory.dof()), max_velocity),
+                 std::vector<double>(static_cast<std::size_t>(trajectory.dof()), max_acceleration),
+                 std::vector<double>(static_cast<std::size_t>(trajectory.dof()), max_jerk),
+                 max_velocity_scaling_factor,
+                 max_acceleration_scaling_factor,
+                 max_jerk_scaling_factor);
+}
+
+bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
+                                        const std::vector<double>& max_velocity,
+                                        const std::vector<double>& max_acceleration,
+                                        const std::vector<double>& max_jerk,
+                                        double max_velocity_scaling_factor,
+                                        double max_acceleration_scaling_factor,
+                                        double max_jerk_scaling_factor) const
+{
+  // NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
+  return compute(trajectory,
+                 Eigen::Map<const Eigen::VectorXd>(max_velocity.data(), static_cast<long>(max_velocity.size())),
+                 Eigen::Map<const Eigen::VectorXd>(max_acceleration.data(), static_cast<long>(max_acceleration.size())),
+                 Eigen::Map<const Eigen::VectorXd>(max_jerk.data(), static_cast<long>(max_jerk.size())),
+                 max_velocity_scaling_factor,
+                 max_acceleration_scaling_factor,
+                 max_jerk_scaling_factor);
+}
+
+bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_velocity,
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_acceleration,
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_jerk,
+                                        double max_velocity_scaling_factor,
+                                        double max_acceleration_scaling_factor,
+                                        double max_jerk_scaling_factor) const
+{
+  Eigen::VectorXd max_velocity_scaling_factors =
+      Eigen::VectorXd::Ones(static_cast<Eigen::Index>(trajectory.size())) * max_velocity_scaling_factor;
+  Eigen::VectorXd max_acceleration_scaling_factors =
+      Eigen::VectorXd::Ones(static_cast<Eigen::Index>(trajectory.size())) * max_acceleration_scaling_factor;
+  Eigen::VectorXd max_jerk_scaling_factors =
+      Eigen::VectorXd::Ones(static_cast<Eigen::Index>(trajectory.size())) * max_jerk_scaling_factor;
+  // NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
+  return compute(trajectory,
+                 max_velocity,
+                 max_acceleration,
+                 max_jerk,
+                 max_velocity_scaling_factors,
+                 max_acceleration_scaling_factors,
+                 max_jerk_scaling_factors);
 }
 
 #ifdef WITH_ONLINE_CLIENT
@@ -175,9 +235,7 @@ void getNextRuckigInput(ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_inpu
 void initializeRuckigState(ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_input,
                            ruckig::OutputParameter<ruckig::DynamicDOFs>& ruckig_output,
                            TrajectoryContainer& trajectory,
-                           const Eigen::Ref<const Eigen::VectorXd>& min_velocity,
                            const Eigen::Ref<const Eigen::VectorXd>& max_velocity,
-                           const Eigen::Ref<const Eigen::VectorXd>& min_acceleration,
                            const Eigen::Ref<const Eigen::VectorXd>& max_acceleration)
 {
   // Set current state
@@ -186,8 +244,9 @@ void initializeRuckigState(ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_i
   Eigen::VectorXd& current_accleration = trajectory.getAcceleration(0);
 
   // clamp due to small numerical errors
-  current_velocity = current_velocity.array().min(max_velocity.array()).max(min_velocity.array());
-  current_accleration = current_accleration.array().min(max_acceleration.array()).max(min_acceleration.array());
+  current_velocity = current_velocity.array().min(max_velocity.array()).max((-1.0 * max_velocity).array());
+  current_accleration =
+      current_accleration.array().min(max_acceleration.array()).max((-1.0 * max_acceleration).array());
 
   // Intialize Ruckig state
   ruckig_input.current_position =
@@ -203,18 +262,17 @@ void initializeRuckigState(ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_i
 }
 
 bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
-                                        const Eigen::Ref<const Eigen::MatrixX2d>& velocity_limits,
-                                        const Eigen::Ref<const Eigen::MatrixX2d>& acceleration_limits,
-                                        const Eigen::Ref<const Eigen::MatrixX2d>& jerk_limits,
-                                        const Eigen::Ref<const Eigen::VectorXd>& /*velocity_scaling_factors*/,
-                                        const Eigen::Ref<const Eigen::VectorXd>& /*acceleration_scaling_factors*/,
-                                        const Eigen::Ref<const Eigen::VectorXd>& /*jerk_scaling_factors*/) const
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_velocity,
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_acceleration,
+                                        const Eigen::Ref<const Eigen::VectorXd>& max_jerk,
+                                        const Eigen::Ref<const Eigen::VectorXd>& /*max_velocity_scaling_factors*/,
+                                        const Eigen::Ref<const Eigen::VectorXd>& /*max_acceleration_scaling_factors*/,
+                                        const Eigen::Ref<const Eigen::VectorXd>& /*max_jerk_scaling_factors*/) const
 {
   if (trajectory.size() < 2)
     return true;
 
-  if (velocity_limits.rows() != trajectory.dof() || acceleration_limits.rows() != trajectory.dof() ||
-      jerk_limits.rows() != trajectory.dof())
+  if (max_velocity.size() != trajectory.dof() || max_acceleration.size() != trajectory.dof())
     return false;
 
   // Create input parameters
@@ -223,28 +281,19 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
   ruckig::InputParameter<ruckig::DynamicDOFs> ruckig_input{ dof };
   ruckig::OutputParameter<ruckig::DynamicDOFs> ruckig_output{ dof };
 
-  const Eigen::VectorXd min_scaled_velocity =
-      velocity_limits.col(0);  // (max_velocity.array() * max_velocity_scaling_factors.array()).transpose();
   const Eigen::VectorXd max_scaled_velocity =
-      velocity_limits.col(1);  // (max_velocity.array() * max_velocity_scaling_factors.array()).transpose();
-  ruckig_input.min_velocity =
-      std::vector<double>(min_scaled_velocity.data(), min_scaled_velocity.data() + min_scaled_velocity.rows());
+      max_velocity;  // (max_velocity.array() * max_velocity_scaling_factors.array()).transpose();
   ruckig_input.max_velocity =
       std::vector<double>(max_scaled_velocity.data(), max_scaled_velocity.data() + max_scaled_velocity.rows());
 
-  const Eigen::VectorXd min_scaled_acceleration =
-      acceleration_limits.col(0);  // max_acceleration.array() * max_acceleration_scaling_factors.array();
   const Eigen::VectorXd max_scaled_acceleration =
-      acceleration_limits.col(1);  // max_acceleration.array() * max_acceleration_scaling_factors.array();
-  ruckig_input.min_acceleration = std::vector<double>(min_scaled_acceleration.data(),
-                                                      min_scaled_acceleration.data() + min_scaled_acceleration.rows());
-
+      max_acceleration;  // max_acceleration.array() * max_acceleration_scaling_factors.array();
   ruckig_input.max_acceleration = std::vector<double>(max_scaled_acceleration.data(),
                                                       max_scaled_acceleration.data() + max_scaled_acceleration.rows());
 
-  if (!(jerk_limits.col(1).array() < 0).all())
+  if (!(max_jerk.array() < 0).all())
   {
-    const Eigen::VectorXd max_scaled_jerk = jerk_limits.col(1);  // max_jerk.array() * max_jerk_scaling_factors.array();
+    const Eigen::VectorXd max_scaled_jerk = max_jerk;  // max_jerk.array() * max_jerk_scaling_factors.array();
     ruckig_input.max_jerk =
         std::vector<double>(max_scaled_jerk.data(), max_scaled_jerk.data() + max_scaled_jerk.rows());
   }
@@ -274,13 +323,7 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
   // Initialize Ruckig
   double timestep = original_duration_from_previous.sum() / static_cast<double>(num_waypoints - 1);
   auto ruckig_ptr = std::make_unique<ruckig::Ruckig<ruckig::DynamicDOFs> >(dof, timestep);
-  initializeRuckigState(ruckig_input,
-                        ruckig_output,
-                        trajectory,
-                        min_scaled_velocity,
-                        max_scaled_velocity,
-                        min_scaled_acceleration,
-                        max_scaled_acceleration);
+  initializeRuckigState(ruckig_input, ruckig_output, trajectory, max_scaled_velocity, max_scaled_acceleration);
 
   // Smooth trajectory
   ruckig::Result ruckig_result{};
@@ -288,7 +331,7 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
   bool smoothing_complete{ false };
   while ((duration_extension_factor < max_duration_extension_factor_) && !smoothing_complete)
   {
-    for (Eigen::Index waypoint_idx = 0; waypoint_idx < static_cast<Eigen::Index>(num_waypoints) - 1; ++waypoint_idx)
+    for (Eigen::Index waypoint_idx = 0; waypoint_idx < num_waypoints - 1; ++waypoint_idx)
     {
       // Get Next Input
       getNextRuckigInput(
@@ -297,7 +340,7 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
       // Run Ruckig
       ruckig_result = ruckig_ptr->update(ruckig_input, ruckig_output);
 
-      if ((waypoint_idx == static_cast<Eigen::Index>(num_waypoints) - 2) && ruckig_result == ruckig::Result::Finished)
+      if ((waypoint_idx == num_waypoints - 2) && ruckig_result == ruckig::Result::Finished)
       {
         smoothing_complete = true;
         break;
@@ -310,8 +353,7 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
         Eigen::VectorXd new_duration_from_previous = original_duration_from_previous;
 
         double time_from_start = original_duration_from_previous(0);
-        for (Eigen::Index time_stretch_idx = 1; time_stretch_idx < static_cast<Eigen::Index>(num_waypoints);
-             ++time_stretch_idx)
+        for (Eigen::Index time_stretch_idx = 1; time_stretch_idx < num_waypoints; ++time_stretch_idx)
         {
           assert(time_stretch_idx < original_duration_from_previous.rows());
           const double duration_from_previous =
@@ -327,13 +369,7 @@ bool RuckigTrajectorySmoothing::compute(TrajectoryContainer& trajectory,
           trajectory.setData(time_stretch_idx, new_velocity, new_acceleration, time_from_start);
         }
         ruckig_ptr = std::make_unique<ruckig::Ruckig<ruckig::DynamicDOFs> >(dof, timestep);
-        initializeRuckigState(ruckig_input,
-                              ruckig_output,
-                              trajectory,
-                              min_scaled_velocity,
-                              max_scaled_velocity,
-                              min_scaled_acceleration,
-                              max_scaled_acceleration);
+        initializeRuckigState(ruckig_input, ruckig_output, trajectory, max_scaled_velocity, max_scaled_acceleration);
 
         // Begin the while() loop again
         break;

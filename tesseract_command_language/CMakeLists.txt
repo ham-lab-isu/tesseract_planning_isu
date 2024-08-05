@@ -30,13 +30,13 @@ endif()
 # Load variable for clang tidy args, compiler options and cxx version
 tesseract_variables()
 
-initialize_code_coverage(ENABLE ${TESSERACT_ENABLE_CODE_COVERAGE})
+initialize_code_coverage()
 set(COVERAGE_EXCLUDE
     /usr/*
     /opt/*
     ${CMAKE_CURRENT_LIST_DIR}/test/*
     /*/gtest/*)
-add_code_coverage_all_targets(EXCLUDE ${COVERAGE_EXCLUDE} ENABLE ${TESSERACT_ENABLE_CODE_COVERAGE})
+add_code_coverage_all_targets(EXCLUDE ${COVERAGE_EXCLUDE})
 
 add_library(
   ${PROJECT_NAME}
@@ -48,7 +48,6 @@ add_library(
   src/poly/state_waypoint_poly.cpp
   src/poly/waypoint_poly.cpp
   src/move_instruction.cpp
-  src/profile_dictionary.cpp
   src/set_analog_instruction.cpp
   src/set_tool_instruction.cpp
   src/timer_instruction.cpp

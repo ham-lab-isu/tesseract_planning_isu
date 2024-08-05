@@ -2,49 +2,6 @@
 Changelog for package tesseract_command_language
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.23.5 (2024-08-01)
--------------------
-
-0.23.4 (2024-07-29)
--------------------
-
-0.23.3 (2024-07-28)
--------------------
-* Cleanup boost serialization (`#490 <https://github.com/tesseract-robotics/tesseract_planning/issues/490>`_)
-* Contributors: Levi Armstrong
-
-0.23.2 (2024-07-25)
--------------------
-
-0.23.1 (2024-07-24)
--------------------
-
-0.23.0 (2024-07-24)
--------------------
-* Add boost serialization support to Profile dictionary
-* Remove TaskComposerProblem and leverage TaskComposerDataStorage instead (`#469 <https://github.com/tesseract-robotics/tesseract_planning/issues/469>`_)
-* Contributors: Levi Armstrong
-
-0.22.1 (2024-06-12)
--------------------
-
-0.22.0 (2024-06-10)
--------------------
-* Add time parameterization interface (`#455 <https://github.com/tesseract-robotics/tesseract_planning/issues/455>`_)
-* Update to use forward declarations (`#449 <https://github.com/tesseract-robotics/tesseract_planning/issues/449>`_)
-* Add toleranced waypoints to TrajOpt Solver (`#403 <https://github.com/tesseract-robotics/tesseract_planning/issues/403>`_)
-* Base code quality CI on 'unstable' (master) tesseract docker container (`#442 <https://github.com/tesseract-robotics/tesseract_planning/issues/442>`_)
-* Contributors: Levi Armstrong, Roelof Oomen, Tyler Marr
-
-0.21.7 (2024-02-03)
--------------------
-
-0.21.6 (2023-12-21)
--------------------
-* Remove include (fixes todo)
-* Add Mac OSX support (`#428 <https://github.com/tesseract-robotics/tesseract_planning/issues/428>`_)
-* Contributors: John Wason, Roelof
-
 0.21.5 (2023-12-13)
 -------------------
 

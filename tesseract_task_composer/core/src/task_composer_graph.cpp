@@ -32,20 +32,9 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/shared_ptr.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/uuid_serialize.hpp>
-#include <yaml-cpp/yaml.h>
-#include <tesseract_common/serialization.h>
-#include <tesseract_common/plugin_info.h>
-#include <tesseract_common/yaml_utils.h>
-#include <tesseract_common/timer.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
-#include <tesseract_task_composer/core/task_composer_executor.h>
 #include <tesseract_task_composer/core/task_composer_graph.h>
-#include <tesseract_task_composer/core/task_composer_task.h>
-#include <tesseract_task_composer/core/task_composer_pipeline.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
 #include <tesseract_task_composer/core/task_composer_plugin_factory.h>
 
 namespace tesseract_planning
@@ -56,7 +45,7 @@ TaskComposerGraph::TaskComposerGraph(std::string name)
 }
 
 TaskComposerGraph::TaskComposerGraph(std::string name, TaskComposerNodeType type, bool conditional)
-  : TaskComposerNode(std::move(name), type, TaskComposerNodePorts{}, conditional)
+  : TaskComposerNode(std::move(name), type, conditional)
 {
 }
 
@@ -73,12 +62,8 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
                                      TaskComposerNodeType type,
                                      const YAML::Node& config,
                                      const TaskComposerPluginFactory& plugin_factory)
-  : TaskComposerNode(std::move(name), type, TaskComposerNodePorts{}, config)
+  : TaskComposerNode(std::move(name), type, config)
 {
-  static const std::set<std::string> graph_expected_keys{ "conditional", "inputs", "outputs",
-                                                          "nodes",       "edges",  "terminals" };
-  tesseract_common::checkForUnknownKeys(config, graph_expected_keys);
-
   std::unordered_map<std::string, boost::uuids::uuid> node_uuids;
   YAML::Node nodes = config["nodes"];
   if (!nodes.IsMap())
@@ -86,9 +71,6 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
 
   for (auto node_it = nodes.begin(); node_it != nodes.end(); ++node_it)
   {
-    static const std::set<std::string> nodes_expected_keys{ "class", "task", "config" };
-    tesseract_common::checkForUnknownKeys(node_it->second, nodes_expected_keys);
-
     auto node_name = node_it->first.as<std::string>();
     if (YAML::Node fn = node_it->second["class"])
     {
@@ -97,7 +79,7 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
       if (YAML::Node cn = node_it->second["config"])
         plugin_info.config = cn;
 
-      std::unique_ptr<TaskComposerNode> task_node = plugin_factory.createTaskComposerNode(node_name, plugin_info);
+      TaskComposerNode::UPtr task_node = plugin_factory.createTaskComposerNode(node_name, plugin_info);
       if (task_node == nullptr)
         throw std::runtime_error("Task Composer Graph '" + name_ + "' failed to create node '" + node_name + "'");
 
@@ -106,7 +88,7 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
     else if (YAML::Node tn = node_it->second["task"])
     {
       auto task_name = tn.as<std::string>();
-      std::unique_ptr<TaskComposerNode> task_node = plugin_factory.createTaskComposerNode(task_name);
+      TaskComposerNode::UPtr task_node = plugin_factory.createTaskComposerNode(task_name);
       if (task_node == nullptr)
         throw std::runtime_error("Task Composer Graph '" + name_ + "' failed to create task '" + task_name +
                                      "' for node '" += node_name + "'");
@@ -115,20 +97,23 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
 
       if (YAML::Node tc = node_it->second["config"])
       {
-        static const std::set<std::string> tasks_expected_keys{ "conditional", "abort_terminal", "remapping" };
-        tesseract_common::checkForUnknownKeys(tc, tasks_expected_keys);
-
         if (YAML::Node n = tc["conditional"])
           task_node->setConditional(n.as<bool>());
 
         if (YAML::Node n = tc["abort_terminal"])
         {
-          if (task_node->getType() == TaskComposerNodeType::GRAPH ||
+          if (task_node->getType() != TaskComposerNodeType::GRAPH ||
               task_node->getType() == TaskComposerNodeType::PIPELINE)
             static_cast<TaskComposerGraph&>(*task_node).setTerminalTriggerAbortByIndex(n.as<int>());
           else
             throw std::runtime_error("YAML entry 'abort_terminal' is only supported for GRAPH and PIPELINE types");
         }
+
+        if (tc["input_remapping"])  // NOLINT
+          throw std::runtime_error("TaskComposerGraph, input_remapping is no longer supported use 'remapping'");
+
+        if (tc["output_remapping"])  // NOLINT
+          throw std::runtime_error("TaskComposerGraph, output_remapping is no longer supported use 'remapping'");
 
         if (YAML::Node n = tc["remapping"])
         {
@@ -212,62 +197,9 @@ TaskComposerGraph::TaskComposerGraph(std::string name,
   {
     throw std::runtime_error("Task Composer Graph '" + name_ + "' is missing 'terminals' entry");
   }
-
-  auto is_valid = TaskComposerGraph::isValid();
-  if (!is_valid.first)
-    throw std::runtime_error(is_valid.second);
 }
 
-std::unique_ptr<TaskComposerNodeInfo> TaskComposerGraph::runImpl(TaskComposerContext& context,
-                                                                 OptionalTaskComposerExecutor executor) const
-{
-  if (terminals_.empty())
-    throw std::runtime_error("TaskComposerGraph, with name '" + name_ + "' does not have terminals!");
-
-  tesseract_common::Timer timer;
-  timer.start();
-
-  TaskComposerFuture::UPtr future = executor.value().get().run(*this, context.data_storage, context.dotgraph);
-  future->wait();
-
-  // Merge child context data into parent context
-  context.task_infos.mergeInfoMap(std::move(future->context->task_infos));
-  if (future->context->isAborted())
-    context.abort(future->context->task_infos.getAbortingNode());
-
-  auto info = std::make_unique<TaskComposerNodeInfo>(*this);
-  auto info_map = context.task_infos.getInfoMap();
-  if (context.dotgraph)
-  {
-    std::stringstream dot_graph;
-    dot_graph << "subgraph cluster_" << toString(uuid_) << " {\n color=black;\n label = \"" << name_ << "\\n("
-              << uuid_str_ << ")\";\n";
-    dump(dot_graph, this, info_map);  // dump the graph including dynamic tasks
-    dot_graph << "}\n";
-    info->dotgraph = dot_graph.str();
-  }
-
-  for (std::size_t i = 0; i < terminals_.size(); ++i)
-  {
-    auto node_info = context.task_infos.getInfo(terminals_[i]);
-    if (node_info != nullptr)
-    {
-      timer.stop();
-      info->input_keys = input_keys_;
-      info->output_keys = output_keys_;
-      info->return_value = static_cast<int>(i);
-      info->color = node_info->color;
-      info->status_code = node_info->status_code;
-      info->status_message = node_info->status_message;
-      info->elapsed_time = timer.elapsedSeconds();
-      return info;
-    }
-  }
-
-  throw std::runtime_error("TaskComposerGraph, with name '" + name_ + "' has no node info for any of the leaf nodes!");
-}
-
-boost::uuids::uuid TaskComposerGraph::addNode(std::unique_ptr<TaskComposerNode> task_node)
+boost::uuids::uuid TaskComposerGraph::addNode(TaskComposerNode::UPtr task_node)
 {
   boost::uuids::uuid uuid = task_node->getUUID();
   task_node->parent_uuid_ = uuid_;
@@ -284,12 +216,12 @@ void TaskComposerGraph::addEdges(boost::uuids::uuid source, std::vector<boost::u
     nodes_.at(d)->inbound_edges_.push_back(source);
 }
 
-std::map<boost::uuids::uuid, std::shared_ptr<const TaskComposerNode>> TaskComposerGraph::getNodes() const
+std::map<boost::uuids::uuid, TaskComposerNode::ConstPtr> TaskComposerGraph::getNodes() const
 {
-  return std::map<boost::uuids::uuid, std::shared_ptr<const TaskComposerNode>>{ nodes_.begin(), nodes_.end() };
+  return std::map<boost::uuids::uuid, TaskComposerNode::ConstPtr>{ nodes_.begin(), nodes_.end() };
 }
 
-std::shared_ptr<const TaskComposerNode> TaskComposerGraph::getNodeByName(const std::string& name) const
+TaskComposerNode::ConstPtr TaskComposerGraph::getNodeByName(const std::string& name) const
 {
   for (const auto& pair : nodes_)
   {
@@ -359,62 +291,57 @@ void TaskComposerGraph::setTerminalTriggerAbortByIndex(int terminal_index)
   }
 }
 
-std::pair<bool, std::string> TaskComposerGraph::isValid() const
-{
-  int root_node_cnt{ 0 };
-  for (const auto& pair : nodes_)
-  {
-    auto node_inbound_edges = pair.second->getInboundEdges();
-    if (node_inbound_edges.empty())
-      root_node_cnt++;
-
-    if (root_node_cnt > 1)
-      return { false, "Task Composer Graph '" + name_ + "' has multiple root nodes" };
-  }
-
-  for (const auto& terminal : terminals_)
-  {
-    if (!nodes_.at(terminal)->getOutboundEdges().empty())
-      return { false, "Task Composer Graph '" + name_ + "' has terminal node with outbound edges" };
-  }
-
-  return { true, "Task Composer Graph Valid" };
-}
-
 void TaskComposerGraph::renameInputKeys(const std::map<std::string, std::string>& input_keys)
 {
-  input_keys_.rename(input_keys);
+  for (const auto& key : input_keys)
+    std::replace(input_keys_.begin(), input_keys_.end(), key.first, key.second);
+
   for (auto& node : nodes_)
     node.second->renameInputKeys(input_keys);
 }
 
 void TaskComposerGraph::renameOutputKeys(const std::map<std::string, std::string>& output_keys)
 {
-  output_keys_.rename(output_keys);
+  for (const auto& key : output_keys)
+    std::replace(output_keys_.begin(), output_keys_.end(), key.first, key.second);
+
   for (auto& node : nodes_)
     node.second->renameOutputKeys(output_keys);
 }
 
-std::string
-TaskComposerGraph::dump(std::ostream& os,
-                        const TaskComposerNode* parent,
-                        const std::map<boost::uuids::uuid, std::unique_ptr<TaskComposerNodeInfo>>& results_map) const
+std::string TaskComposerGraph::dump(std::ostream& os,
+                                    const TaskComposerNode* parent,
+                                    const std::map<boost::uuids::uuid, TaskComposerNodeInfo::UPtr>& results_map) const
 {
   if (parent == nullptr)
     os << "digraph TaskComposer {\n";
 
   std::ostringstream sub_graphs;
   const std::string tmp = toString(uuid_);
-  os << "subgraph cluster_" << tmp << " {\n color=black;\n nojustify=true label = \"" << name_
-     << "\\nUUID: " << uuid_str_ << "\\l";
-  os << "Inputs:\\l" << input_keys_;
-  os << "Outputs:\\l" << output_keys_;
-  os << "Conditional: " << ((conditional_) ? "True" : "False") << "\\l";
+  os << "subgraph cluster_" << tmp << " {\n color=black;\n label = \"" << name_ << "\\n(" << uuid_str_ << ")";
+  os << "\\n Inputs: [";
+  for (std::size_t i = 0; i < input_keys_.size(); ++i)
+  {
+    os << input_keys_[i];
+    if (i < input_keys_.size() - 1)
+      os << ", ";
+  }
+  os << "]";
+
+  os << "\\n Outputs: [";
+  for (std::size_t i = 0; i < output_keys_.size(); ++i)
+  {
+    os << output_keys_[i];
+    if (i < output_keys_.size() - 1)
+      os << ", ";
+  }
+  os << "]";
+  os << "\\n Conditional: " << ((conditional_) ? "True" : "False");
   if (getType() == TaskComposerNodeType::PIPELINE || getType() == TaskComposerNodeType::GRAPH)
   {
     auto it = results_map.find(getUUID());
     if (it != results_map.end())
-      os << "Time: " << std::fixed << std::setprecision(3) << it->second->elapsed_time << "s\\l";
+      os << "\\nTime: " << std::fixed << std::setprecision(3) << it->second->elapsed_time << "s";
   }
   os << "\";";
   for (const auto& pair : nodes_)
@@ -429,25 +356,40 @@ TaskComposerGraph::dump(std::ostream& os,
       auto it = results_map.find(node->getUUID());
       std::string color = (it != results_map.end() && it->second->color != "white") ? it->second->color : "blue";
       const std::string tmp = toString(node->uuid_, "node_");
-      const TaskComposerKeys& input_keys = node->getInputKeys();
-      const TaskComposerKeys& output_keys = node->getOutputKeys();
-      os << std::endl
-         << tmp << " [shape=box3d, nojustify=true label=\"Subgraph: " << node->name_ << "\\nUUID: " << node->uuid_str_
-         << "\\l";
-      os << "Inputs:\\l" << input_keys;
-      os << "Outputs:\\l" << output_keys;
-      os << "Conditional: " << ((node->isConditional()) ? "True" : "False") << "\\l";
+      const std::vector<std::string>& input_keys = node->getInputKeys();
+      const std::vector<std::string>& output_keys = node->getOutputKeys();
+      os << std::endl << tmp << " [shape=box3d, label=\"Subgraph: " << node->name_ << "\\n(" << node->uuid_str_ << ")";
+      os << "\\n Inputs: [";
+      for (std::size_t i = 0; i < input_keys.size(); ++i)
+      {
+        os << input_keys[i];
+        if (i < input_keys.size() - 1)
+          os << ", ";
+      }
+      os << "]";
+
+      os << "\\n Outputs: [";
+      for (std::size_t i = 0; i < output_keys.size(); ++i)
+      {
+        os << output_keys[i];
+        if (i < output_keys.size() - 1)
+          os << ", ";
+      }
+      os << "]";
+
+      os << "\\n Conditional: " << ((node->isConditional()) ? "True" : "False");
       if (it != results_map.end())
-        os << "Time: " << std::fixed << std::setprecision(3) << it->second->elapsed_time << "s\\l";
+        os << "\\nTime: " << std::fixed << std::setprecision(3) << it->second->elapsed_time << "s";
 
       os << "\", margin=\"0.1\", color=" << color << "];\n";  // NOLINT
       node->dump(sub_graphs, this, results_map);
     }
   }
 
-  if (type_ == TaskComposerNodeType::GRAPH || type_ == TaskComposerNodeType::PIPELINE)
+  if (type_ == TaskComposerNodeType::PIPELINE)
   {
-    if (conditional_)
+    const auto& pipeline = static_cast<const TaskComposerPipeline&>(*this);
+    if (pipeline.isConditional())
     {
       int return_value = -1;
 
@@ -524,5 +466,6 @@ void TaskComposerGraph::serialize(Archive& ar, const unsigned int /*version*/)
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerGraph)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerGraph)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerGraph)

@@ -25,7 +25,6 @@
  */
 
 #include <tesseract_time_parameterization/core/tesseract_common_trajectory.h>
-#include <tesseract_common/joint_state.h>
 
 namespace tesseract_planning
 {

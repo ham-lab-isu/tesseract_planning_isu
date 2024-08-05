@@ -28,34 +28,17 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <Eigen/Core>
+#include <ompl/base/State.h>
+#include <ompl/geometric/PathGeometric.h>
+#include <Eigen/Geometry>
 #include <functional>
-#include <memory>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_motion_planners/ompl/types.h>
-
-#include <tesseract_common/eigen_types.h>
-#include <tesseract_collision/core/fwd.h>
-
-namespace ompl::base
-{
-class State;
-class StateSpace;
-using StateSpacePtr = std::shared_ptr<StateSpace>;
-class StateSampler;
-using StateSamplerPtr = std::shared_ptr<StateSampler>;
-}  // namespace ompl::base
-
-namespace ompl::geometric
-{
-class PathGeometric;
-}
+#include <tesseract_common/types.h>
+#include <tesseract_motion_planners/ompl/ompl_problem.h>
 
 namespace tesseract_planning
 {
-struct OMPLProblem;
-
 Eigen::Map<Eigen::VectorXd> RealVectorStateSpaceExtractor(const ompl::base::State* s1, unsigned dimension);
 
 #ifndef OMPL_LESS_1_4_0

@@ -37,7 +37,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_command_language/cartesian_waypoint.h>
 #include <tesseract_command_language/joint_waypoint.h>
 #include <tesseract_command_language/state_waypoint.h>
-#include <tesseract_command_language/profile_dictionary.h>
 
 namespace tesseract_planning
 {
@@ -196,20 +195,17 @@ const std::string& MoveInstruction::getProfile() const { return profile_; }
 void MoveInstruction::setPathProfile(const std::string& profile) { path_profile_ = profile; }
 const std::string& MoveInstruction::getPathProfile() const { return path_profile_; }
 
-void MoveInstruction::setProfileOverrides(std::shared_ptr<const ProfileDictionary> profile_overrides)
+void MoveInstruction::setProfileOverrides(ProfileDictionary::ConstPtr profile_overrides)
 {
   profile_overrides_ = std::move(profile_overrides);
 }
-std::shared_ptr<const ProfileDictionary> MoveInstruction::getProfileOverrides() const { return profile_overrides_; }
+ProfileDictionary::ConstPtr MoveInstruction::getProfileOverrides() const { return profile_overrides_; }
 
-void MoveInstruction::setPathProfileOverrides(std::shared_ptr<const ProfileDictionary> profile_overrides)
+void MoveInstruction::setPathProfileOverrides(ProfileDictionary::ConstPtr profile_overrides)
 {
   path_profile_overrides_ = std::move(profile_overrides);
 }
-std::shared_ptr<const ProfileDictionary> MoveInstruction::getPathProfileOverrides() const
-{
-  return path_profile_overrides_;
-}
+ProfileDictionary::ConstPtr MoveInstruction::getPathProfileOverrides() const { return path_profile_overrides_; }
 
 const std::string& MoveInstruction::getDescription() const { return description_; }
 
@@ -262,6 +258,5 @@ void MoveInstruction::serialize(Archive& ar, const unsigned int /*version*/)
 }  // namespace tesseract_planning
 
 #include <tesseract_common/serialization.h>
-
-TESSERACT_MOVE_INSTRUCTION_EXPORT_IMPLEMENT(tesseract_planning::MoveInstruction)
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::MoveInstruction)
+TESSERACT_MOVE_INSTRUCTION_EXPORT_IMPLEMENT(tesseract_planning::MoveInstruction)

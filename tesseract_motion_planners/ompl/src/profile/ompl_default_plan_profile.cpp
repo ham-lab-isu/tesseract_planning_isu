@@ -31,8 +31,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <ompl/base/objectives/PathLengthOptimizationObjective.h>
 #include <ompl/base/goals/GoalStates.h>
 #include <boost/algorithm/string.hpp>
-#include <tinyxml2.h>
-#include <console_bridge/console.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_command_language/poly/move_instruction_poly.h>
@@ -40,27 +38,16 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_motion_planners/ompl/profile/ompl_default_plan_profile.h>
 #include <tesseract_motion_planners/ompl/utils.h>
 
-#include <tesseract_motion_planners/ompl/ompl_planner_configurator.h>
 #include <tesseract_motion_planners/ompl/continuous_motion_validator.h>
 #include <tesseract_motion_planners/ompl/discrete_motion_validator.h>
 #include <tesseract_motion_planners/ompl/state_collision_validator.h>
 #include <tesseract_motion_planners/ompl/compound_state_validator.h>
 
 #include <tesseract_kinematics/core/utils.h>
-#include <tesseract_kinematics/core/joint_group.h>
-#include <tesseract_kinematics/core/kinematic_group.h>
-#include <tesseract_collision/core/discrete_contact_manager.h>
-#include <tesseract_environment/environment.h>
 
 namespace tesseract_planning
 {
-OMPLDefaultPlanProfile::OMPLDefaultPlanProfile()
-  : planners({ std::make_shared<const RRTConnectConfigurator>(), std::make_shared<const RRTConnectConfigurator>() })
-{
-}
-
 OMPLDefaultPlanProfile::OMPLDefaultPlanProfile(const tinyxml2::XMLElement& xml_element)
-  : planners({ std::make_shared<const RRTConnectConfigurator>(), std::make_shared<const RRTConnectConfigurator>() })
 {
   const tinyxml2::XMLElement* state_space_element = xml_element.FirstChildElement("StateSpace");
   const tinyxml2::XMLElement* planning_time_element = xml_element.FirstChildElement("PlanningTime");
@@ -79,7 +66,7 @@ OMPLDefaultPlanProfile::OMPLDefaultPlanProfile(const tinyxml2::XMLElement& xml_e
   //  xml_element.FirstChildElement("LongestValidSegment"
   //                                                                                                   "Length");
 
-  int status{ tinyxml2::XMLError::XML_SUCCESS };
+  tinyxml2::XMLError status{ tinyxml2::XMLError::XML_SUCCESS };
 
   if (state_space_element != nullptr)
   {
@@ -405,9 +392,9 @@ void OMPLDefaultPlanProfile::applyGoalStates(OMPLProblem& prob,
       Eigen::VectorXd& solution = joint_solutions[i];
 
       // Check limits
-      if (tesseract_common::satisfiesLimits<double>(solution, limits.joint_limits))
+      if (tesseract_common::satisfiesPositionLimits<double>(solution, limits.joint_limits))
       {
-        tesseract_common::enforceLimits<double>(solution, limits.joint_limits);
+        tesseract_common::enforcePositionLimits<double>(solution, limits.joint_limits);
       }
       else
       {
@@ -467,9 +454,9 @@ void OMPLDefaultPlanProfile::applyGoalStates(OMPLProblem& prob,
   {
     // Check limits
     Eigen::VectorXd solution = joint_waypoint;
-    if (tesseract_common::satisfiesLimits<double>(solution, limits.joint_limits))
+    if (tesseract_common::satisfiesPositionLimits<double>(solution, limits.joint_limits))
     {
-      tesseract_common::enforceLimits<double>(solution, limits.joint_limits);
+      tesseract_common::enforcePositionLimits<double>(solution, limits.joint_limits);
     }
     else
     {
@@ -540,9 +527,9 @@ void OMPLDefaultPlanProfile::applyStartStates(OMPLProblem& prob,
       Eigen::VectorXd& solution = joint_solutions[i];
 
       // Check limits
-      if (tesseract_common::satisfiesLimits<double>(solution, limits.joint_limits))
+      if (tesseract_common::satisfiesPositionLimits<double>(solution, limits.joint_limits))
       {
-        tesseract_common::enforceLimits<double>(solution, limits.joint_limits);
+        tesseract_common::enforcePositionLimits<double>(solution, limits.joint_limits);
       }
       else
       {
@@ -604,9 +591,9 @@ void OMPLDefaultPlanProfile::applyStartStates(OMPLProblem& prob,
   {
     Eigen::VectorXd solution = joint_waypoint;
 
-    if (tesseract_common::satisfiesLimits<double>(solution, limits.joint_limits))
+    if (tesseract_common::satisfiesPositionLimits<double>(solution, limits.joint_limits))
     {
-      tesseract_common::enforceLimits<double>(solution, limits.joint_limits);
+      tesseract_common::enforcePositionLimits<double>(solution, limits.joint_limits);
     }
     else
     {

@@ -38,10 +38,9 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/uuid/uuid_serialize.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_command_language/poly/move_instruction_poly.h>
 #include <tesseract_command_language/composite_instruction.h>
-#include <tesseract_command_language/profile_dictionary.h>
 
+#include <tesseract_command_language/move_instruction.h> /** @todo Remove after refactor is complete */
 namespace tesseract_planning
 {
 bool moveFilter(const InstructionPoly& instruction, const CompositeInstruction& /*composite*/)
@@ -84,14 +83,11 @@ void CompositeInstruction::setProfile(const std::string& profile)
 }
 const std::string& CompositeInstruction::getProfile() const { return profile_; }
 
-void CompositeInstruction::setProfileOverrides(std::shared_ptr<const ProfileDictionary> profile_overrides)
+void CompositeInstruction::setProfileOverrides(ProfileDictionary::ConstPtr profile_overrides)
 {
   profile_overrides_ = std::move(profile_overrides);
 }
-std::shared_ptr<const ProfileDictionary> CompositeInstruction::getProfileOverrides() const
-{
-  return profile_overrides_;
-}
+ProfileDictionary::ConstPtr CompositeInstruction::getProfileOverrides() const { return profile_overrides_; }
 
 void CompositeInstruction::setManipulatorInfo(tesseract_common::ManipulatorInfo info)
 {
@@ -535,7 +531,6 @@ void CompositeInstruction::serialize(Archive& ar, const unsigned int /*version*/
 }  // namespace tesseract_planning
 
 #include <tesseract_common/serialization.h>
-
-TESSERACT_INSTRUCTION_EXPORT_IMPLEMENT(tesseract_planning::CompositeInstruction)
-TESSERACT_ANY_EXPORT_IMPLEMENT(TesseractPlanningCompositeInstruction)
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::CompositeInstruction)
+TESSERACT_INSTRUCTION_EXPORT_IMPLEMENT(tesseract_planning::CompositeInstruction)
+TESSERACT_ANY_EXPORT_IMPLEMENT(tesseract_planning::CompositeInstruction)

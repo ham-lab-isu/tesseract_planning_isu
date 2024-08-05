@@ -29,18 +29,8 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/freespace_hybrid_example.h>
-
-#include <trajopt_common/collision_types.h>
-
-#include <tesseract_scene_graph/link.h>
-#include <tesseract_scene_graph/joint.h>
-
-#include <tesseract_state_solver/state_solver.h>
-
-#include <tesseract_environment/environment.h>
 #include <tesseract_environment/utils.h>
-#include <tesseract_environment/commands/add_link_command.h>
-
+#include <tesseract_environment/commands.h>
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/state_waypoint.h>
 #include <tesseract_command_language/cartesian_waypoint.h>
@@ -50,18 +40,10 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_command_language/utils.h>
 
 #include <tesseract_motion_planners/ompl/profile/ompl_default_plan_profile.h>
-#include <tesseract_motion_planners/ompl/ompl_planner_configurator.h>
-#include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_composite_profile.h>
 #include <tesseract_motion_planners/core/utils.h>
-
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 #include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-#include <tesseract_task_composer/core/task_composer_node.h>
-#include <tesseract_task_composer/core/task_composer_executor.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
 #include <tesseract_task_composer/core/task_composer_plugin_factory.h>
-
-#include <tesseract_visualization/visualization.h>
 #include <tesseract_visualization/markers/toolpath_marker.h>
 
 #include <tesseract_geometry/impl/sphere.h>
@@ -74,25 +56,18 @@ using namespace tesseract_planning;
 using tesseract_common::ManipulatorInfo;
 
 static const std::string OMPL_DEFAULT_NAMESPACE = "OMPLMotionPlannerTask";
-static const std::string TRAJOPT_IFOPT_DEFAULT_NAMESPACE = "TrajOptIfoptMotionPlannerTask";
 
 namespace tesseract_examples
 {
-FreespaceHybridExample::FreespaceHybridExample(std::shared_ptr<tesseract_environment::Environment> env,
-                                               std::shared_ptr<tesseract_visualization::Visualization> plotter,
-                                               bool ifopt,
-                                               bool debug,
+FreespaceHybridExample::FreespaceHybridExample(tesseract_environment::Environment::Ptr env,
+                                               tesseract_visualization::Visualization::Ptr plotter,
                                                double range,
                                                double planning_time)
-  : Example(std::move(env), std::move(plotter))
-  , ifopt_(ifopt)
-  , debug_(debug)
-  , range_(range)
-  , planning_time_(planning_time)
+  : Example(std::move(env), std::move(plotter)), range_(range), planning_time_(planning_time)
 {
 }
 
-Command::Ptr addSphere()
+Command::Ptr FreespaceHybridExample::addSphere()
 {
   // Add sphere to environment
   Link link_sphere("sphere_attached");
@@ -118,11 +93,6 @@ Command::Ptr addSphere()
 
 bool FreespaceHybridExample::run()
 {
-  if (debug_)
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG);
-  else
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_INFO);
-
   // Add sphere to environment
   Command::Ptr cmd = addSphere();
   if (!env_->applyCommand(cmd))
@@ -193,9 +163,6 @@ bool FreespaceHybridExample::run()
   // Create Executor
   auto executor = factory.createTaskComposerExecutor("TaskflowExecutor");
 
-  // Create profile dictionary
-  auto profiles = std::make_shared<ProfileDictionary>();
-
   // Create OMPL Profile
   auto ompl_profile = std::make_shared<OMPLDefaultPlanProfile>();
   auto ompl_planner_config = std::make_shared<RRTConnectConfigurator>();
@@ -203,37 +170,20 @@ bool FreespaceHybridExample::run()
   ompl_profile->planning_time = planning_time_;
   ompl_profile->planners = { ompl_planner_config, ompl_planner_config };
 
+  // Create profile dictionary
+  auto profiles = std::make_shared<ProfileDictionary>();
   profiles->addProfile<OMPLPlanProfile>(OMPL_DEFAULT_NAMESPACE, "FREESPACE", ompl_profile);
 
-  if (ifopt_)
-  {
-    // Create TrajOpt_Ifopt Profile
-    auto trajopt_ifopt_composite_profile = std::make_shared<TrajOptIfoptDefaultCompositeProfile>();
-    trajopt_ifopt_composite_profile->collision_constraint_config->contact_manager_config =
-        tesseract_collision::ContactManagerConfig(0.025);
-    trajopt_ifopt_composite_profile->collision_cost_config->contact_manager_config =
-        tesseract_collision::ContactManagerConfig(0.025);
-    trajopt_ifopt_composite_profile->velocity_coeff = Eigen::VectorXd::Ones(1);
-    trajopt_ifopt_composite_profile->acceleration_coeff = Eigen::VectorXd::Ones(1);
-    trajopt_ifopt_composite_profile->jerk_coeff = Eigen::VectorXd::Ones(1);
-
-    profiles->addProfile<TrajOptIfoptCompositeProfile>(
-        TRAJOPT_IFOPT_DEFAULT_NAMESPACE, "FREESPACE", trajopt_ifopt_composite_profile);
-  }
-
   // Create task
-  const std::string task_name = (ifopt_) ? "FreespaceIfoptPipeline" : "FreespacePipeline";
-  TaskComposerNode::UPtr task = factory.createTaskComposerNode(task_name);
-  const std::string output_key = task->getOutputKeys().get("program");
+  TaskComposerNode::UPtr task = factory.createTaskComposerNode("FreespacePipeline");
+  const std::string output_key = task->getOutputKeys().front();
 
-  // Create Task Composer Data Storage
-  auto data = std::make_unique<tesseract_planning::TaskComposerDataStorage>();
-  data->setData("planning_input", program);
-  data->setData("environment", std::shared_ptr<const tesseract_environment::Environment>(env_));
-  data->setData("profiles", profiles);
+  // Create Task Composer Problem
+  auto problem = std::make_unique<PlanningTaskComposerProblem>(env_, profiles);
+  problem->input = program;
 
   // Solve task
-  TaskComposerFuture::UPtr future = executor->run(*task, std::move(data));
+  TaskComposerFuture::UPtr future = executor->run(*task, std::move(problem));
   future->wait();
 
   // Plot Process Trajectory

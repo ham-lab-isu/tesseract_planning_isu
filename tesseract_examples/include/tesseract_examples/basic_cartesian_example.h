@@ -26,6 +26,8 @@
 #ifndef TESSERACT_EXAMPLES_BASIC_CARTESIAN_EXAMPLE_H
 #define TESSERACT_EXAMPLES_BASIC_CARTESIAN_EXAMPLE_H
 
+#include <tesseract_common/macros.h>
+
 #include <tesseract_examples/example.h>
 
 namespace tesseract_examples
@@ -36,8 +38,8 @@ namespace tesseract_examples
 class BasicCartesianExample : public Example
 {
 public:
-  BasicCartesianExample(std::shared_ptr<tesseract_environment::Environment> env,
-                        std::shared_ptr<tesseract_visualization::Visualization> plotter = nullptr,
+  BasicCartesianExample(tesseract_environment::Environment::Ptr env,
+                        tesseract_visualization::Visualization::Ptr plotter = nullptr,
                         bool ifopt = false,
                         bool debug = false);
 
@@ -52,6 +54,7 @@ public:
 private:
   bool ifopt_;
   bool debug_;
+  static tesseract_environment::Command::Ptr addPointCloud();
 };
 
 }  // namespace tesseract_examples

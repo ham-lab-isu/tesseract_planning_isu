@@ -28,14 +28,12 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
-#include <functional>
-#include <tesseract_task_composer/planning/tesseract_task_composer_planning_nodes_export.h>
+#include <console_bridge/console.h>
+#include <boost/serialization/string.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
-#include <tesseract_common/fwd.h>
+#include <tesseract_common/any_poly.h>
 
 namespace tesseract_planning
 {
@@ -53,16 +51,9 @@ class TaskComposerPluginFactory;
  *   Composite - Raster segment
  * }
  */
-class TESSERACT_TASK_COMPOSER_PLANNING_NODES_EXPORT RasterOnlyMotionTask : public TaskComposerTask
+class RasterOnlyMotionTask : public TaskComposerTask
 {
 public:
-  // Requried
-  static const std::string INOUT_PROGRAM_PORT;
-  static const std::string INPUT_ENVIRONMENT_PORT;
-
-  // Optional
-  static const std::string INPUT_MANIP_INFO_PORT;
-
   struct TaskFactoryResults
   {
     TaskComposerNode::UPtr node;
@@ -73,9 +64,8 @@ public:
 
   RasterOnlyMotionTask();
   explicit RasterOnlyMotionTask(std::string name,
-                                std::string input_program_key,
-                                std::string input_environment_key,
-                                std::string output_program_key,
+                                std::string input_key,
+                                std::string output_key,
                                 bool conditional,
                                 TaskFactory raster_task_factory,
                                 TaskFactory transition_task_factory);
@@ -103,16 +93,15 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int /*version*/);  // NOLINT
 
-  static TaskComposerNodePorts ports();
-
-  std::unique_ptr<TaskComposerNodeInfo> runImpl(TaskComposerContext& context,
-                                                OptionalTaskComposerExecutor executor) const override final;
+  TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                     OptionalTaskComposerExecutor executor) const override final;
 
   static void checkTaskInput(const tesseract_common::AnyPoly& input);
 };
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::RasterOnlyMotionTask)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::RasterOnlyMotionTask, "RasterOnlyMotionTask")
 
 #endif  // TESSERACT_TASK_COMPOSER_RASTER_ONLY_MOTION_TASK_H

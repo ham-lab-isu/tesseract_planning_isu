@@ -33,7 +33,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <Eigen/Geometry>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_motion_planners/trajopt/trajopt_waypoint_config.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_profile.h>
 
 namespace tesseract_planning
@@ -52,10 +51,9 @@ public:
   TrajOptDefaultPlanProfile(TrajOptDefaultPlanProfile&&) = default;
   TrajOptDefaultPlanProfile& operator=(TrajOptDefaultPlanProfile&&) = default;
 
-  CartesianWaypointConfig cartesian_cost_config;
-  CartesianWaypointConfig cartesian_constraint_config;
-  JointWaypointConfig joint_cost_config;
-  JointWaypointConfig joint_constraint_config;
+  Eigen::VectorXd cartesian_coeff{ Eigen::VectorXd::Constant(1, 1, 5) };
+  Eigen::VectorXd joint_coeff{ Eigen::VectorXd::Constant(1, 1, 5) };
+  trajopt::TermType term_type{ trajopt::TermType::TT_CNT };
 
   /** @brief Error function that is set as a constraint for each timestep.
    *

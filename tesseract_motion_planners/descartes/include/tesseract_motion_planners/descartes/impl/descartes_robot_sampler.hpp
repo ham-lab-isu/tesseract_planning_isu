@@ -34,25 +34,21 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/descartes/descartes_robot_sampler.h>
-#include <tesseract_motion_planners/descartes/descartes_collision.h>
-#include <tesseract_motion_planners/descartes/descartes_vertex_evaluator.h>
-#include <tesseract_kinematics/core/kinematic_group.h>
 #include <tesseract_kinematics/core/utils.h>
 
 namespace tesseract_planning
 {
 template <typename FloatType>
-DescartesRobotSampler<FloatType>::DescartesRobotSampler(
-    std::string target_working_frame,
-    const Eigen::Isometry3d& target_pose,  // NOLINT(modernize-pass-by-value)
-    PoseSamplerFn target_pose_sampler,
-    std::shared_ptr<const tesseract_kinematics::KinematicGroup> manip,
-    std::shared_ptr<DescartesCollision> collision,
-    std::string tcp_frame,
-    const Eigen::Isometry3d& tcp_offset,  // NOLINT(modernize-pass-by-value)
-    bool allow_collision,
-    std::shared_ptr<DescartesVertexEvaluator> is_valid,
-    bool use_redundant_joint_solutions)
+DescartesRobotSampler<FloatType>::DescartesRobotSampler(std::string target_working_frame,
+                                                        const Eigen::Isometry3d& target_pose,
+                                                        PoseSamplerFn target_pose_sampler,
+                                                        tesseract_kinematics::KinematicGroup::ConstPtr manip,
+                                                        DescartesCollision::Ptr collision,
+                                                        std::string tcp_frame,
+                                                        const Eigen::Isometry3d& tcp_offset,
+                                                        bool allow_collision,
+                                                        DescartesVertexEvaluator::Ptr is_valid,
+                                                        bool use_redundant_joint_solutions)
   : target_working_frame_(std::move(target_working_frame))
   , target_pose_(target_pose)
   , target_pose_sampler_(std::move(target_pose_sampler))
@@ -76,15 +72,10 @@ std::vector<descartes_light::StateSample<FloatType>> DescartesRobotSampler<Float
   // Generate all possible Cartesian poses
   tesseract_common::VectorIsometry3d target_poses = target_pose_sampler_(target_pose_);
 
-  bool found_ik_sol = false;
-  std::stringstream error_string_stream;
-
   // Generate the IK solutions for those poses
   std::vector<descartes_light::StateSample<FloatType>> samples;
-  for (std::size_t i = 0; i < target_poses.size(); i++)
+  for (const auto& pose : target_poses)
   {
-    const auto& pose = target_poses[i];
-
     // Get the transformation to the kinematic tip link
     Eigen::Isometry3d target_pose = pose * tcp_offset_.inverse();
 
@@ -95,16 +86,9 @@ std::vector<descartes_light::StateSample<FloatType>> DescartesRobotSampler<Float
     if (ik_solutions.empty())
       continue;
 
-    tesseract_collision::ContactTrajectoryResults traj_contacts(manip_->getJointNames(),
-                                                                static_cast<int>(ik_solutions.size()));
-
-    found_ik_sol = true;
-
     // Check each individual joint solution
-    for (std::size_t j = 0; j < ik_solutions.size(); j++)
+    for (const auto& sol : ik_solutions)
     {
-      const auto& sol = ik_solutions[j];
-
       if ((is_valid_ != nullptr) && !(*is_valid_)(sol))
         continue;
 
@@ -115,19 +99,8 @@ std::vector<descartes_light::StateSample<FloatType>> DescartesRobotSampler<Float
       }
       else if (!allow_collision_)
       {
-        tesseract_collision::ContactResultMap coll_results = collision_->validate(sol);
-        if (coll_results.empty())
-        {
+        if (collision_->validate(sol))
           samples.push_back(descartes_light::StateSample<FloatType>{ state, 0.0 });
-        }
-        else if (console_bridge::getLogLevel() == console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG)
-        {
-          tesseract_collision::ContactTrajectoryStepResults step_contacts(static_cast<int>(j), sol, sol, 1);
-          tesseract_collision::ContactTrajectorySubstepResults substep_contacts(1, sol);
-          substep_contacts.contacts = coll_results;
-          step_contacts.substeps[0] = substep_contacts;
-          traj_contacts.steps[j] = step_contacts;
-        }
       }
       else
       {
@@ -135,29 +108,10 @@ std::vector<descartes_light::StateSample<FloatType>> DescartesRobotSampler<Float
         samples.push_back(descartes_light::StateSample<FloatType>{ state, cost });
       }
     }
-
-    if (console_bridge::getLogLevel() == console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG)
-    {
-      error_string_stream << "For sample " << i << " " << ik_solutions.size()
-                          << " IK solutions were found, with a collision summary of:" << std::endl;
-      error_string_stream << traj_contacts.collisionFrequencyPerLink().str();
-    }
   }
 
   if (samples.empty())
-  {
-    std::stringstream ss;
-    ss << "Descartes vertex failure: ";
-    if (!found_ik_sol)
-      ss << "No IK solutions were found. ";
-    else
-      ss << "All IK solutions found were in collision or invalid. ";
-    ss << target_poses.size() << " samples tried." << std::endl;
-    if (found_ik_sol)
-      ss << error_string_stream.str();
-    error_string_ = ss.str();
     return samples;
-  }
 
   if (allow_collision_)
   {
@@ -208,18 +162,7 @@ std::vector<descartes_light::StateSample<FloatType>> DescartesRobotSampler<Float
     samples.insert(samples.end(), redundant_samples.begin(), redundant_samples.end());
   }
 
-  error_string_ = "Found at least 1 valid solution";
-
   return samples;
-}
-
-template <typename FloatType>
-void DescartesRobotSampler<FloatType>::print(std::ostream& os) const
-{
-  os << "Working Frame: " << target_working_frame_ << ", TCP Frame: " << tcp_frame_ << "\n";
-  os << "Target Pose:\n" << target_pose_.matrix() << "\n";
-  os << "TCP Offset:\n" << tcp_offset_.matrix() << "\n";
-  os << "Error string:\n" << error_string_;
 }
 
 }  // namespace tesseract_planning

@@ -25,8 +25,6 @@
  */
 
 #include <tesseract_examples/car_seat_example.h>
-#include <tesseract_common/filesystem.h>
-#include <tesseract_environment/environment.h>
 #include <tesseract_support/tesseract_support_resource_locator.h>
 
 using namespace tesseract_examples;
@@ -44,7 +42,7 @@ int main(int /*argc*/, char** /*argv*/)
   if (!env->init(urdf_path, srdf_path, locator))
     exit(1);
 
-  CarSeatExample example(env, nullptr, false);
+  CarSeatExample example(env, nullptr);
   if (!example.run())
     exit(1);
 }

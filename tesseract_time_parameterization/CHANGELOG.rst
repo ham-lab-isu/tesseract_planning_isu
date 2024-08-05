@@ -2,42 +2,6 @@
 Changelog for package tesseract_time_parameterization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.23.5 (2024-08-01)
--------------------
-
-0.23.4 (2024-07-29)
--------------------
-
-0.23.3 (2024-07-28)
--------------------
-
-0.23.2 (2024-07-25)
--------------------
-
-0.23.1 (2024-07-24)
--------------------
-
-0.23.0 (2024-07-24)
--------------------
-
-0.22.1 (2024-06-12)
--------------------
-
-0.22.0 (2024-06-10)
--------------------
-* Add time parameterization interface (`#455 <https://github.com/tesseract-robotics/tesseract_planning/issues/455>`_)
-* Update to use forward declarations (`#449 <https://github.com/tesseract-robotics/tesseract_planning/issues/449>`_)
-* Contributors: Levi Armstrong
-
-0.21.7 (2024-02-03)
--------------------
-
-0.21.6 (2023-12-21)
--------------------
-* Fix TOTG state time from start numerical issue (`#431 <https://github.com/tesseract-robotics/tesseract_planning/issues/431>`_)
-* Add Mac OSX support (`#428 <https://github.com/tesseract-robotics/tesseract_planning/issues/428>`_)
-* Contributors: John Wason, Levi Armstrong
-
 0.21.5 (2023-12-13)
 -------------------
 

@@ -28,12 +28,9 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <map>
 #include <memory>
 #include <unordered_map>
 #include <shared_mutex>
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_common/any_poly.h>
@@ -57,24 +54,11 @@ public:
   TaskComposerDataStorage& operator=(TaskComposerDataStorage&&) noexcept;
 
   /**
-   * @brief Get the name data storage.
-   * @details This is primarily used to hold the pipeline name
-   * @return The name
-   */
-  std::string getName() const;
-
-  /**
-   * @brief Set the name
-   * @param name The name
-   */
-  void setName(const std::string& name);
-
-  /**
    * @brief Check if key exists
    * @param key The key to check for
    * @return True if the key exist, otherwise false
    */
-  bool hasKey(const std::string& key) const;
+  bool hasKey(const std::string& key);
 
   /**
    * @brief Set data for the provided key
@@ -122,10 +106,12 @@ protected:
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
 
   mutable std::shared_mutex mutex_;
-  std::string name_;
   std::unordered_map<std::string, tesseract_common::AnyPoly> data_;
 };
 
 }  // namespace tesseract_planning
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::TaskComposerDataStorage)
+
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::TaskComposerDataStorage, "TaskComposerDataStorage")
+
 #endif  // TESSERACT_TASK_COMPOSER_TASK_COMPOSER_DATA_STORAGE_H

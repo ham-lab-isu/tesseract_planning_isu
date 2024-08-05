@@ -29,9 +29,12 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <string>
-#include <unordered_map>
+#include <vector>
+#include <memory>
+#include <Eigen/Geometry>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+#include <tesseract_kinematics/core/joint_group.h>
 #include <tesseract_examples/example.h>
 
 namespace tesseract_examples
@@ -40,10 +43,8 @@ namespace tesseract_examples
 class CarSeatExample : public Example
 {
 public:
-  CarSeatExample(std::shared_ptr<tesseract_environment::Environment> env,
-                 std::shared_ptr<tesseract_visualization::Visualization> plotter = nullptr,
-                 bool ifopt = false,
-                 bool debug = false);
+  CarSeatExample(tesseract_environment::Environment::Ptr env,
+                 tesseract_visualization::Visualization::Ptr plotter = nullptr);
   ~CarSeatExample() override = default;
   CarSeatExample(const CarSeatExample&) = default;
   CarSeatExample& operator=(const CarSeatExample&) = default;
@@ -53,9 +54,13 @@ public:
   bool run() override final;
 
 private:
-  bool ifopt_;
-  bool debug_;
   std::unordered_map<std::string, std::unordered_map<std::string, double>> saved_positions_;
+
+  static std::unordered_map<std::string, std::unordered_map<std::string, double>> getPredefinedPosition();
+  static std::vector<double> getPositionVector(const tesseract_kinematics::JointGroup& joint_group,
+                                               const std::unordered_map<std::string, double>& pos);
+  static Eigen::VectorXd getPositionVectorXd(const tesseract_kinematics::JointGroup& joint_group,
+                                             const std::unordered_map<std::string, double>& pos);
 };
 
 }  // namespace tesseract_examples

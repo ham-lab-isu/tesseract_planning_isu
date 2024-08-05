@@ -28,34 +28,25 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <trajopt/plot_callback.hpp>
 #include <trajopt/problem_description.hpp>
-#include <trajopt/utils.hpp>
 #include <trajopt_common/config.hpp>
 #include <trajopt_common/logging.hpp>
 #include <trajopt_sco/optimizers.hpp>
 #include <trajopt_sco/sco_common.hpp>
+#include <tesseract_environment/utils.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/trajopt/trajopt_motion_planner.h>
-#include <tesseract_motion_planners/trajopt/profile/trajopt_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_plan_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_solver_profile.h>
 #include <tesseract_motion_planners/core/utils.h>
 #include <tesseract_motion_planners/planner_utils.h>
 
-#include <tesseract_command_language/poly/move_instruction_poly.h>
 #include <tesseract_command_language/utils.h>
 
-#include <tesseract_common/joint_state.h>
-
-#include <tesseract_kinematics/core/kinematic_group.h>
-
-#include <tesseract_environment/environment.h>
-#include <tesseract_environment/utils.h>
-
 constexpr auto SOLUTION_FOUND{ "Found valid solution" };
-constexpr auto ERROR_INVALID_INPUT{ "Failed invalid input: " };
-constexpr auto ERROR_FAILED_TO_FIND_VALID_SOLUTION{ "Failed to find valid solution: " };
+constexpr auto ERROR_INVALID_INPUT{ "Failed invalid input" };
+constexpr auto ERROR_FAILED_TO_FIND_VALID_SOLUTION{ "Failed to find valid solution" };
 
 using namespace trajopt;
 
@@ -71,19 +62,15 @@ bool TrajOptMotionPlanner::terminate()
 
 void TrajOptMotionPlanner::clear() {}
 
-std::unique_ptr<MotionPlanner> TrajOptMotionPlanner::clone() const
-{
-  return std::make_unique<TrajOptMotionPlanner>(name_);
-}
+MotionPlanner::Ptr TrajOptMotionPlanner::clone() const { return std::make_shared<TrajOptMotionPlanner>(name_); }
 
 PlannerResponse TrajOptMotionPlanner::solve(const PlannerRequest& request) const
 {
   PlannerResponse response;
-  std::string reason;
-  if (!checkRequest(request, reason))
+  if (!checkRequest(request))
   {
     response.successful = false;
-    response.message = std::string(ERROR_INVALID_INPUT) + reason;
+    response.message = ERROR_INVALID_INPUT;
     return response;
   }
 
@@ -102,7 +89,7 @@ PlannerResponse TrajOptMotionPlanner::solve(const PlannerRequest& request) const
     {
       CONSOLE_BRIDGE_logError("TrajOptPlanner failed to generate problem: %s.", e.what());
       response.successful = false;
-      response.message = std::string(ERROR_INVALID_INPUT) + e.what();
+      response.message = ERROR_INVALID_INPUT;
       return response;
     }
 
@@ -139,12 +126,8 @@ PlannerResponse TrajOptMotionPlanner::solve(const PlannerRequest& request) const
   if (opt->results().status != sco::OptStatus::OPT_CONVERGED)
   {
     response.successful = false;
-    response.message = std::string(ERROR_FAILED_TO_FIND_VALID_SOLUTION) + sco::statusToString(opt->results().status);
-  }
-  else
-  {
-    response.successful = true;
-    response.message = SOLUTION_FOUND;
+    response.message = ERROR_FAILED_TO_FIND_VALID_SOLUTION;
+    return response;
   }
 
   const std::vector<std::string> joint_names = problem->GetKin()->getJointNames();
@@ -156,14 +139,14 @@ PlannerResponse TrajOptMotionPlanner::solve(const PlannerRequest& request) const
   // Enforce limits
   for (Eigen::Index i = 0; i < traj.rows(); i++)
   {
-    assert(tesseract_common::satisfiesLimits<double>(traj.row(i), joint_limits, 1e-4));
-    tesseract_common::enforceLimits<double>(traj.row(i), joint_limits);
+    assert(tesseract_common::satisfiesPositionLimits<double>(traj.row(i), joint_limits, 1e-4));
+    tesseract_common::enforcePositionLimits<double>(traj.row(i), joint_limits);
   }
 
   // Flatten the results to make them easier to process
   response.results = request.instructions;
   auto results_instructions = response.results.flatten(&moveFilter);
-  assert(static_cast<Eigen::Index>(results_instructions.size()) == traj.rows());
+  assert(results_instructions.size() == traj.rows());
   for (std::size_t idx = 0; idx < results_instructions.size(); idx++)
   {
     auto& move_instruction = results_instructions.at(idx).get().as<MoveInstructionPoly>();
@@ -171,6 +154,8 @@ PlannerResponse TrajOptMotionPlanner::solve(const PlannerRequest& request) const
         move_instruction, joint_names, traj.row(static_cast<Eigen::Index>(idx)), request.format_result_as_input);
   }
 
+  response.successful = true;
+  response.message = SOLUTION_FOUND;
   return response;
 }
 
@@ -248,7 +233,7 @@ TrajOptMotionPlanner::createProblem(const PlannerRequest& request) const
   std::vector<Eigen::VectorXd> seed_states;
   seed_states.reserve(move_instructions.size());
 
-  for (int i = 0; i < static_cast<Eigen::Index>(move_instructions.size()); ++i)
+  for (int i = 0; i < move_instructions.size(); ++i)
   {
     const auto& move_instruction = move_instructions[static_cast<std::size_t>(i)].get().as<MoveInstructionPoly>();
 

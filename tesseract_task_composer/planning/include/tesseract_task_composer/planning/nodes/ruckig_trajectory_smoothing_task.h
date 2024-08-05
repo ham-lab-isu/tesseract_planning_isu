@@ -27,8 +27,6 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/access.hpp>
-#include <boost/serialization/export.hpp>
-#include <tesseract_task_composer/planning/tesseract_task_composer_planning_nodes_export.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/core/task_composer_task.h>
@@ -36,19 +34,9 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 namespace tesseract_planning
 {
 class TaskComposerPluginFactory;
-class TESSERACT_TASK_COMPOSER_PLANNING_NODES_EXPORT RuckigTrajectorySmoothingTask : public TaskComposerTask
+class RuckigTrajectorySmoothingTask : public TaskComposerTask
 {
 public:
-  // Requried
-  static const std::string INOUT_PROGRAM_PORT;
-  static const std::string INPUT_ENVIRONMENT_PORT;
-  static const std::string INPUT_PROFILES_PORT;
-
-  // Optional
-  static const std::string INPUT_MANIP_INFO_PORT;
-  static const std::string INPUT_COMPOSITE_PROFILE_REMAPPING_PORT;
-  static const std::string INPUT_MOVE_PROFILE_REMAPPING_PORT;
-
   using Ptr = std::shared_ptr<RuckigTrajectorySmoothingTask>;
   using ConstPtr = std::shared_ptr<const RuckigTrajectorySmoothingTask>;
   using UPtr = std::unique_ptr<RuckigTrajectorySmoothingTask>;
@@ -56,10 +44,8 @@ public:
 
   RuckigTrajectorySmoothingTask();
   explicit RuckigTrajectorySmoothingTask(std::string name,
-                                         std::string input_program_key,
-                                         std::string input_environment_key,
-                                         std::string input_profiles_key,
-                                         std::string output_program_key,
+                                         std::string input_key,
+                                         std::string output_key,
                                          bool conditional = true);
   explicit RuckigTrajectorySmoothingTask(std::string name,
                                          const YAML::Node& config,
@@ -79,14 +65,13 @@ protected:
   template <class Archive>
   void serialize(Archive& ar, const unsigned int version);  // NOLINT
 
-  static TaskComposerNodePorts ports();
-
-  std::unique_ptr<TaskComposerNodeInfo>
-  runImpl(TaskComposerContext& context, OptionalTaskComposerExecutor executor = std::nullopt) const override final;
+  TaskComposerNodeInfo::UPtr runImpl(TaskComposerContext& context,
+                                     OptionalTaskComposerExecutor executor = std::nullopt) const override final;
 };
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::RuckigTrajectorySmoothingTask)
+#include <boost/serialization/export.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_planning::RuckigTrajectorySmoothingTask, "RuckigTrajectorySmoothingTask")
 
 #endif  // TESSERACT_TASK_COMPOSER_RUCKIG_TRAJECTORY_SMOOTHING_TASK_H

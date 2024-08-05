@@ -29,13 +29,14 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <cmath>
+#include <Eigen/Geometry>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/simple/profile/simple_planner_profile.h>
 
 namespace tesseract_planning
 {
+struct KinematicGroupInstructionInfo;
 class SimplePlannerLVSPlanProfile : public SimplePlannerPlanProfile
 {
 public:

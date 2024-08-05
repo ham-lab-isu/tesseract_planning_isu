@@ -1,6 +1,5 @@
 ARG TAG
-FROM ghcr.io/tesseract-robotics/trajopt:${TAG}
-ENV E_TAG=$TAG
+FROM ghcr.io/tesseract-robotics/tesseract:${TAG}
 
 SHELL ["/bin/bash", "-c"]
 
@@ -9,14 +8,10 @@ ENV DEBIAN_FRONTEND noninteractive
 USER root
 
 # Install the dependency repositories
-RUN if [[ $(lsb_release -cs) != noble ]] ; then \
-  apt install -y --no-install-recommends software-properties-common \
+RUN apt install -y --no-install-recommends software-properties-common \
   && add-apt-repository -y ppa:levi-armstrong/tesseract-robotics \
   && apt update \
-  && apt install -y libompl-dev taskflow \
-  ; else \
-  apt install -y libompl-dev libtaskflow-cpp-dev \
-  ; fi
+  && apt install -y libompl-dev taskflow
 
 # Bind mount the source directory so as not to unnecessarily copy source code into the docker image
 ARG WORKSPACE_DIR=/opt/tesseract_planning
@@ -31,7 +26,6 @@ RUN --mount=type=bind,target=${WORKSPACE_DIR}/src/tesseract_planning \
 # Bind mount the source directory so as not to unnecessarily copy source code into the docker image
 RUN --mount=type=bind,target=${WORKSPACE_DIR}/src/tesseract_planning \
   source /opt/tesseract/install/setup.bash \
-  && source /opt/trajopt/install/setup.bash \
   && cd ${WORKSPACE_DIR} \ 
   && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release \
   && rm -rf build log

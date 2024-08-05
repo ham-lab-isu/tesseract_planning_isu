@@ -29,23 +29,13 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <ompl/base/MotionValidator.h>
-#include <vector>
-#include <map>
+#include <ompl/base/StateValidityChecker.h>
 #include <mutex>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_motion_planners/ompl/types.h>
-#include <tesseract_collision/core/fwd.h>
-#include <tesseract_kinematics/core/fwd.h>
-#include <tesseract_environment/fwd.h>
-
-namespace ompl::base
-{
-class SpaceInformation;
-using SpaceInformationPtr = std::shared_ptr<SpaceInformation>;
-class StateValidityChecker;
-using StateValidityCheckerPtr = std::shared_ptr<StateValidityChecker>;
-}  // namespace ompl::base
+#include <tesseract_motion_planners/ompl/utils.h>
+#include <tesseract_environment/environment.h>
+#include <tesseract_kinematics/core/forward_kinematics.h>
 
 namespace tesseract_planning
 {
@@ -56,7 +46,7 @@ public:
   ContinuousMotionValidator(const ompl::base::SpaceInformationPtr& space_info,
                             ompl::base::StateValidityCheckerPtr state_validator,
                             const tesseract_environment::Environment& env,
-                            std::shared_ptr<const tesseract_kinematics::JointGroup> manip,
+                            tesseract_kinematics::JointGroup::ConstPtr manip,
                             const tesseract_collision::CollisionCheckConfig& collision_check_config,
                             OMPLStateExtractor extractor);
 
@@ -83,10 +73,10 @@ private:
   ompl::base::StateValidityCheckerPtr state_validator_;
 
   /** @brief The Tesseract Forward Kinematics */
-  std::shared_ptr<const tesseract_kinematics::JointGroup> manip_;
+  tesseract_kinematics::JointGroup::ConstPtr manip_;
 
   /** @brief The continuous contact manager used for creating cached continuous contact managers. */
-  std::shared_ptr<tesseract_collision::ContinuousContactManager> continuous_contact_manager_;
+  tesseract_collision::ContinuousContactManager::Ptr continuous_contact_manager_;
 
   /** @brief A list of active links */
   std::vector<std::string> links_;
@@ -103,8 +93,7 @@ private:
   mutable std::mutex mutex_;
 
   /** @brief The continuous contact manager cache */
-  mutable std::map<unsigned long int, std::shared_ptr<tesseract_collision::ContinuousContactManager>>
-      continuous_contact_managers_;
+  mutable std::map<unsigned long int, tesseract_collision::ContinuousContactManager::Ptr> continuous_contact_managers_;
 };
 }  // namespace tesseract_planning
 

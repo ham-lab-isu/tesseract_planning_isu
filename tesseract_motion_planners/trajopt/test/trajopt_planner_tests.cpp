@@ -30,14 +30,8 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_common/types.h>
-
-#include <tesseract_kinematics/core/joint_group.h>
-
-#include <tesseract_scene_graph/scene_state.h>
-
 #include <tesseract_environment/environment.h>
 
-#include <tesseract_command_language/profile_dictionary.h>
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/joint_waypoint.h>
 #include <tesseract_command_language/cartesian_waypoint.h>
@@ -48,10 +42,9 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt/serialize.h>
 #include <tesseract_motion_planners/trajopt/deserialize.h>
-#include <tesseract_motion_planners/simple/interpolation.h>
-#include <tesseract_motion_planners/core/types.h>
-#include <tesseract_motion_planners/core/utils.h>
 
+#include <tesseract_motion_planners/core/utils.h>
+#include <tesseract_motion_planners/simple/interpolation.h>
 #include <tesseract_support/tesseract_support_resource_locator.h>
 
 const int NUM_STEPS = 7;
@@ -238,10 +231,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceJointJoint)  // NOLINT
   request.profiles = profiles;
 
   {
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -255,10 +244,7 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceJointJoint)  // NOLINT
         (tesseract_tests::vectorContainsType<sco::Cost::Ptr, trajopt::TrajOptCostFromErrFunc>(problem->getCosts())));
   }
   {
-    plan_profile->cartesian_cost_config.enabled = true;
-    plan_profile->cartesian_constraint_config.enabled = false;
-    plan_profile->joint_cost_config.enabled = true;
-    plan_profile->joint_constraint_config.enabled = false;
+    plan_profile->term_type = trajopt::TermType::TT_COST;
 
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
@@ -325,10 +311,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceJointCart)  // NOLINT
   request.profiles = profiles;
 
   {
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -343,10 +325,7 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceJointCart)  // NOLINT
   }
 
   {
-    plan_profile->cartesian_cost_config.enabled = true;
-    plan_profile->cartesian_constraint_config.enabled = false;
-    plan_profile->joint_cost_config.enabled = true;
-    plan_profile->joint_constraint_config.enabled = false;
+    plan_profile->term_type = trajopt::TermType::TT_COST;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -416,10 +395,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceCartJoint)  // NOLINT
   request.profiles = profiles;
 
   {
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -434,10 +409,7 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceCartJoint)  // NOLINT
   }
 
   {
-    plan_profile->cartesian_cost_config.enabled = true;
-    plan_profile->cartesian_constraint_config.enabled = false;
-    plan_profile->joint_cost_config.enabled = true;
-    plan_profile->joint_constraint_config.enabled = false;
+    plan_profile->term_type = trajopt::TermType::TT_COST;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -507,10 +479,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceCartCart)  // NOLINT
   request.profiles = profiles;
 
   {
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -524,10 +492,7 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptFreespaceCartCart)  // NOLINT
         (tesseract_tests::vectorContainsType<sco::Cost::Ptr, trajopt::TrajOptCostFromErrFunc>(problem->getCosts())));
   }
   {
-    plan_profile->cartesian_cost_config.enabled = true;
-    plan_profile->cartesian_constraint_config.enabled = false;
-    plan_profile->joint_cost_config.enabled = true;
-    plan_profile->joint_constraint_config.enabled = false;
+    plan_profile->term_type = trajopt::TermType::TT_COST;
     std::shared_ptr<trajopt::ProblemConstructionInfo> pci = test_planner.createProblem(request);
 
     trajopt::TrajOptProb::Ptr problem = trajopt::ConstructProblem(*pci);
@@ -614,11 +579,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptPlannerBooleanFlagsCartCart)  // NOL
     composite_profile->collision_constraint_config.enabled = t4;
     composite_profile->collision_cost_config.enabled = t4;
 
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
-
     pci = test_planner.createProblem(request);
 
     problem = trajopt::ConstructProblem(*pci);
@@ -667,10 +627,6 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptArrayJointConstraint)  // NOLINT
 
   // Create Profiles
   auto plan_profile = std::make_shared<TrajOptDefaultPlanProfile>();
-  plan_profile->cartesian_cost_config.enabled = false;
-  plan_profile->cartesian_constraint_config.enabled = true;
-  plan_profile->joint_cost_config.enabled = false;
-  plan_profile->joint_constraint_config.enabled = true;
   auto composite_profile = std::make_shared<TrajOptDefaultCompositeProfile>();
 
   // Profile Dictionary
@@ -731,10 +687,7 @@ TEST_F(TesseractPlanningTrajoptUnit, TrajoptArrayJointCost)  // NOLINT
 
   // Create Profiles
   auto plan_profile = std::make_shared<TrajOptDefaultPlanProfile>();
-  plan_profile->cartesian_cost_config.enabled = true;
-  plan_profile->cartesian_constraint_config.enabled = false;
-  plan_profile->joint_cost_config.enabled = true;
-  plan_profile->joint_constraint_config.enabled = false;
+  plan_profile->term_type = trajopt::TermType::TT_COST;  // Everything associated with profile is now added as a cost
 
   auto composite_profile = std::make_shared<TrajOptDefaultCompositeProfile>();
 
@@ -798,16 +751,9 @@ TEST(TesseractPlanningTrajoptSerializeUnit, SerializeTrajoptDefaultPlanToXml)  /
 {
   // Write program to file
   TrajOptDefaultPlanProfile plan_profile;
-  plan_profile.cartesian_cost_config.coeff = Eigen::VectorXd::Ones(6) * 10;
-  plan_profile.joint_cost_config.coeff = Eigen::VectorXd::Ones(6) * 9;
-  plan_profile.cartesian_cost_config.enabled = true;
-  plan_profile.cartesian_constraint_config.enabled = false;
-  plan_profile.joint_cost_config.enabled = true;
-  plan_profile.joint_constraint_config.enabled = false;
-  plan_profile.cartesian_constraint_config.lower_tolerance = Eigen::VectorXd::Ones(6) * -0.01;
-  plan_profile.cartesian_constraint_config.upper_tolerance = Eigen::VectorXd::Ones(6) * 0.02;
-  plan_profile.joint_constraint_config.lower_tolerance = Eigen::VectorXd::Ones(6) * -0.03;
-  plan_profile.joint_constraint_config.upper_tolerance = Eigen::VectorXd::Ones(6) * 0.04;
+  plan_profile.cartesian_coeff = Eigen::VectorXd::Ones(6) * 10;
+  plan_profile.joint_coeff = Eigen::VectorXd::Ones(6) * 9;
+  plan_profile.term_type = trajopt::TermType::TT_COST;
 
   EXPECT_TRUE(toXMLFile(plan_profile, tesseract_common::getTempPath() + "trajopt_default_plan_example_input.xml"));
 
@@ -822,21 +768,7 @@ TEST(TesseractPlanningTrajoptSerializeUnit, SerializeTrajoptDefaultPlanToXml)  /
   // Re-write file and compare changed from default term
   EXPECT_TRUE(
       toXMLFile(imported_plan_profile, tesseract_common::getTempPath() + "trajopt_default_plan_example_input2.xml"));
-  EXPECT_TRUE(plan_profile.cartesian_cost_config.enabled == imported_plan_profile.cartesian_cost_config.enabled);
-  EXPECT_TRUE(plan_profile.cartesian_constraint_config.enabled ==
-              imported_plan_profile.cartesian_constraint_config.enabled);
-  EXPECT_TRUE(plan_profile.joint_cost_config.enabled == imported_plan_profile.joint_cost_config.enabled);
-  EXPECT_TRUE(plan_profile.joint_constraint_config.enabled == imported_plan_profile.joint_constraint_config.enabled);
-  EXPECT_TRUE(plan_profile.cartesian_cost_config.coeff == imported_plan_profile.cartesian_cost_config.coeff);
-  EXPECT_TRUE(plan_profile.joint_cost_config.coeff == imported_plan_profile.joint_cost_config.coeff);
-  EXPECT_TRUE(plan_profile.cartesian_constraint_config.lower_tolerance ==
-              imported_plan_profile.cartesian_constraint_config.lower_tolerance);
-  EXPECT_TRUE(plan_profile.cartesian_constraint_config.upper_tolerance ==
-              imported_plan_profile.cartesian_constraint_config.upper_tolerance);
-  EXPECT_TRUE(plan_profile.joint_constraint_config.lower_tolerance ==
-              imported_plan_profile.joint_constraint_config.lower_tolerance);
-  EXPECT_TRUE(plan_profile.joint_constraint_config.upper_tolerance ==
-              imported_plan_profile.joint_constraint_config.upper_tolerance);
+  EXPECT_TRUE(plan_profile.term_type == imported_plan_profile.term_type);
 }
 
 int main(int argc, char** argv)

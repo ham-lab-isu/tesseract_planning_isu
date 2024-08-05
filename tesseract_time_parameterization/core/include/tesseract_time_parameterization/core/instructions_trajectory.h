@@ -29,12 +29,11 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <vector>
-#include <Eigen/Core>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_time_parameterization/core/trajectory_container.h>
 #include <tesseract_command_language/poly/instruction_poly.h>
-#include <tesseract_command_language/fwd.h>
+#include <tesseract_command_language/composite_instruction.h>
 
 namespace tesseract_planning
 {

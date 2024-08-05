@@ -47,10 +47,8 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_time_parameterization/totg/time_optimal_trajectory_generation.h>
-#include <tesseract_time_parameterization/core/trajectory_container.h>
-#include <tesseract_command_language/composite_instruction.h>
-#include <tesseract_command_language/utils.h>
 #include <tesseract_common/utils.h>
+#include <tesseract_command_language/utils.h>
 
 constexpr double EPS = 0.000001;
 
@@ -61,45 +59,55 @@ TimeOptimalTrajectoryGeneration::TimeOptimalTrajectoryGeneration(double path_tol
 {
 }
 
-bool TimeOptimalTrajectoryGeneration::compute(TrajectoryContainer& trajectory,
-                                              const Eigen::Ref<const Eigen::MatrixX2d>& velocity_limits,
-                                              const Eigen::Ref<const Eigen::MatrixX2d>& acceleration_limits,
-                                              const Eigen::Ref<const Eigen::MatrixX2d>& /*jerk_limits*/,
-                                              const Eigen::Ref<const Eigen::VectorXd>& velocity_scaling_factors,
-                                              const Eigen::Ref<const Eigen::VectorXd>& acceleration_scaling_factors,
-                                              const Eigen::Ref<const Eigen::VectorXd>& /*jerk_scaling_factors*/) const
+bool TimeOptimalTrajectoryGeneration::computeTimeStamps(TrajectoryContainer& trajectory,
+                                                        const Eigen::Ref<const Eigen::VectorXd>& max_velocity,
+                                                        const Eigen::Ref<const Eigen::VectorXd>& max_acceleration,
+                                                        double max_velocity_scaling_factor,
+                                                        double max_acceleration_scaling_factor) const
 {
   if (trajectory.empty())
     return true;
 
   // Validate velocity scaling
-  double local_velocity_scaling_factor = 1;
-  if ((velocity_scaling_factors.rows() == 1) && (velocity_scaling_factors.array() > 0.0).all() &&
-      (velocity_scaling_factors.array() <= 1.0).all())
+  double velocity_scaling_factor = 1.0;
+  if (max_velocity_scaling_factor > 0.0 && max_velocity_scaling_factor <= 1.0)
   {
-    local_velocity_scaling_factor = velocity_scaling_factors(0);
+    velocity_scaling_factor = max_velocity_scaling_factor;
+  }
+  else if (max_velocity_scaling_factor == 0.0)
+  {
+    CONSOLE_BRIDGE_logDebug("A max_velocity_scaling_factor of 0.0 was specified, defaulting to %f instead.",
+                            velocity_scaling_factor);
   }
   else
   {
-    CONSOLE_BRIDGE_logWarn("Invalid velocity_scaling_factor specified, defaulting to 1 instead.");
+    CONSOLE_BRIDGE_logWarn("Invalid max_velocity_scaling_factor %f specified, defaulting to %f instead.",
+                           max_velocity_scaling_factor,
+                           velocity_scaling_factor);
   }
 
   // Validate acceleration scaling
-  double local_acceleration_scaling_factor = 1;
-  if ((acceleration_scaling_factors.rows() == 1) && (acceleration_scaling_factors.array() > 0.0).all() &&
-      (acceleration_scaling_factors.array() <= 1.0).all())
+  double acceleration_scaling_factor = 1.0;
+  if (max_acceleration_scaling_factor > 0.0 && max_acceleration_scaling_factor <= 1.0)
   {
-    local_acceleration_scaling_factor = acceleration_scaling_factors(0);
+    acceleration_scaling_factor = max_acceleration_scaling_factor;
+  }
+  else if (max_acceleration_scaling_factor == 0.0)
+  {
+    CONSOLE_BRIDGE_logDebug("A max_acceleration_scaling_factor of 0.0 was specified, defaulting to %f instead.",
+                            acceleration_scaling_factor);
   }
   else
   {
-    CONSOLE_BRIDGE_logWarn("Invalid acceleration_scaling_factors specified, defaulting to 1 instead.");
+    CONSOLE_BRIDGE_logWarn("Invalid max_acceleration_scaling_factor %f specified, defaulting to %f instead.",
+                           max_acceleration_scaling_factor,
+                           acceleration_scaling_factor);
   }
 
   // Validate limits
-  if (velocity_limits.rows() != acceleration_limits.rows())
+  if (max_velocity.rows() != max_acceleration.rows())
   {
-    CONSOLE_BRIDGE_logError("Invalid velocity or acceleration specified. They should be the same length");
+    CONSOLE_BRIDGE_logError("Invalid max_velocity or max_acceleration specified. They should be the same length");
   }
 
   // Flatten program
@@ -159,11 +167,10 @@ bool TimeOptimalTrajectoryGeneration::compute(TrajectoryContainer& trajectory,
     dummy += 1.0;
   }
 
-  Eigen::VectorXd max_velocity_dummy_appended(velocity_limits.rows() + 1);
-  max_velocity_dummy_appended << (velocity_limits.col(1) * local_velocity_scaling_factor),
-      std::numeric_limits<double>::max();
-  Eigen::VectorXd max_acceleration_dummy_appended(acceleration_limits.rows() + 1);
-  max_acceleration_dummy_appended << (acceleration_limits.col(1) * local_acceleration_scaling_factor),
+  Eigen::VectorXd max_velocity_dummy_appended(max_velocity.size() + 1);
+  max_velocity_dummy_appended << (max_velocity * velocity_scaling_factor), std::numeric_limits<double>::max();
+  Eigen::VectorXd max_acceleration_dummy_appended(max_acceleration.size() + 1);
+  max_acceleration_dummy_appended << (max_acceleration * acceleration_scaling_factor),
       std::numeric_limits<double>::max();
 
   // Now actually call the algorithm
@@ -932,7 +939,7 @@ double Trajectory::getDuration() const { return trajectory_.back().time_; }
 bool Trajectory::assignData(TrajectoryContainer& trajectory, const std::vector<std::size_t>& mapping) const
 {
   const auto& dist_mapping = path_.getMapping();
-  assert(trajectory.size() == static_cast<Eigen::Index>(mapping.size()));
+  assert(trajectory.size() == mapping.size());
 
   // Set Start
   PathData path_data = getPathData(0);
@@ -949,7 +956,7 @@ bool Trajectory::assignData(TrajectoryContainer& trajectory, const std::vector<s
 
     time = getTime(dist_mapping.at(seg_idx));
     if (!(time > prev_time))
-      time = prev_time + 1e-8;
+      time = prev_time + 1e-16;
 
     path_data = getPathData(time);
     uv = getVelocity(path_data).head(trajectory.dof());
@@ -960,10 +967,7 @@ bool Trajectory::assignData(TrajectoryContainer& trajectory, const std::vector<s
   }
 
   // Set end
-  if (!(time > prev_time))
-    time = prev_time + 1e-8;
-
-  path_data = getPathData(time);
+  path_data = getPathData(prev_time);
   uv = getVelocity(path_data).head(trajectory.dof());
   ua = getAcceleration(path_data).head(trajectory.dof());
   trajectory.setData((trajectory.size() - 1), uv, ua, time);

@@ -29,13 +29,12 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <Eigen/Core>
+#include <ompl/base/OptimizationObjective.h>
+#include <ompl/base/objectives/PathLengthOptimizationObjective.h>
+#include <Eigen/Geometry>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-namespace ompl::base
-{
-class State;
-}
+#include <tesseract_motion_planners/ompl/ompl_problem.h>
 
 namespace tesseract_planning
 {

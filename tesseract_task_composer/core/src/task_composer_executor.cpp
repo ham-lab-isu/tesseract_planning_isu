@@ -27,14 +27,9 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/nvp.hpp>
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
 #include <tesseract_task_composer/core/task_composer_executor.h>
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
-#include <tesseract_task_composer/core/task_composer_node.h>
 
 namespace tesseract_planning
 {
@@ -42,11 +37,11 @@ TaskComposerExecutor::TaskComposerExecutor(std::string name) : name_(std::move(n
 
 const std::string& TaskComposerExecutor::getName() const { return name_; }
 
-std::unique_ptr<TaskComposerFuture> TaskComposerExecutor::run(const TaskComposerNode& node,
-                                                              std::shared_ptr<TaskComposerDataStorage> data_storage,
-                                                              bool dotgraph)
+TaskComposerFuture::UPtr TaskComposerExecutor::run(const TaskComposerNode& node,
+                                                   TaskComposerProblem::Ptr problem,
+                                                   TaskComposerDataStorage::Ptr data_storage)
 {
-  return run(node, std::make_shared<TaskComposerContext>(node.getName(), std::move(data_storage), dotgraph));
+  return run(node, std::make_shared<TaskComposerContext>(std::move(problem), std::move(data_storage)));
 }
 
 bool TaskComposerExecutor::operator==(const TaskComposerExecutor& rhs) const { return (name_ == rhs.name_); }
@@ -63,5 +58,6 @@ void TaskComposerExecutor::serialize(Archive& ar, const unsigned int /*version*/
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerExecutor)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::TaskComposerExecutor)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::TaskComposerExecutor)

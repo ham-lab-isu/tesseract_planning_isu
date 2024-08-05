@@ -28,50 +28,31 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <console_bridge/console.h>
-#include <trajopt_common/collision_types.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_examples/basic_cartesian_example.h>
-
-#include <tesseract_common/timer.h>
-
-#include <tesseract_collision/core/types.h>
-
-#include <tesseract_scene_graph/link.h>
-#include <tesseract_scene_graph/joint.h>
-
-#include <tesseract_state_solver/state_solver.h>
-
-#include <tesseract_environment/environment.h>
 #include <tesseract_environment/utils.h>
-#include <tesseract_environment/commands/add_link_command.h>
-
-#include <tesseract_command_language/profile_dictionary.h>
+#include <tesseract_common/timer.h>
 #include <tesseract_command_language/composite_instruction.h>
 #include <tesseract_command_language/state_waypoint.h>
 #include <tesseract_command_language/cartesian_waypoint.h>
 #include <tesseract_command_language/joint_waypoint.h>
 #include <tesseract_command_language/move_instruction.h>
 #include <tesseract_command_language/utils.h>
-
-#include <tesseract_visualization/visualization.h>
 #include <tesseract_visualization/markers/toolpath_marker.h>
 
 #include <tesseract_motion_planners/core/utils.h>
+
 #include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_composite_profile.h>
 #include <tesseract_motion_planners/trajopt_ifopt/profile/trajopt_ifopt_default_plan_profile.h>
 #include <tesseract_motion_planners/trajopt/profile/trajopt_default_plan_profile.h>
 
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 #include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
-#include <tesseract_task_composer/core/task_composer_future.h>
-#include <tesseract_task_composer/core/task_composer_executor.h>
-#include <tesseract_task_composer/core/task_composer_node.h>
 #include <tesseract_task_composer/core/task_composer_plugin_factory.h>
 
 #include <tesseract_geometry/impl/octree.h>
-#include <tesseract_geometry/impl/octree_utils.h>
 
 using namespace tesseract_environment;
 using namespace tesseract_scene_graph;
@@ -85,7 +66,7 @@ static const std::string TRAJOPT_DEFAULT_NAMESPACE = "TrajOptMotionPlannerTask";
 
 namespace tesseract_examples
 {
-Command::Ptr addPointCloud()
+Command::Ptr BasicCartesianExample::addPointCloud()
 {
   // Create octomap and add it to the local environment
   pcl::PointCloud<pcl::PointXYZ> full_cloud;
@@ -113,9 +94,8 @@ Command::Ptr addPointCloud()
   Visual::Ptr visual = std::make_shared<Visual>();
   visual->origin = Eigen::Isometry3d::Identity();
   visual->origin.translation() = Eigen::Vector3d(1, 0, 0);
-  auto ot = tesseract_geometry::createOctree(full_cloud, 2 * delta, true, true);
   visual->geometry =
-      std::make_shared<tesseract_geometry::Octree>(std::move(ot), tesseract_geometry::OctreeSubType::BOX, true, true);
+      std::make_shared<tesseract_geometry::Octree>(full_cloud, 2 * delta, tesseract_geometry::Octree::BOX, true);
   link_octomap.visual.push_back(visual);
 
   Collision::Ptr collision = std::make_shared<Collision>();
@@ -131,8 +111,8 @@ Command::Ptr addPointCloud()
   return std::make_shared<tesseract_environment::AddLinkCommand>(link_octomap, joint_octomap);
 }
 
-BasicCartesianExample::BasicCartesianExample(std::shared_ptr<tesseract_environment::Environment> env,
-                                             std::shared_ptr<tesseract_visualization::Visualization> plotter,
+BasicCartesianExample::BasicCartesianExample(tesseract_environment::Environment::Ptr env,
+                                             tesseract_visualization::Visualization::Ptr plotter,
                                              bool ifopt,
                                              bool debug)
   : Example(std::move(env), std::move(plotter)), ifopt_(ifopt), debug_(debug)
@@ -172,8 +152,6 @@ bool BasicCartesianExample::run()
 
   if (debug_)
     console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_DEBUG);
-  else
-    console_bridge::setLogLevel(console_bridge::LogLevel::CONSOLE_BRIDGE_LOG_INFO);
 
   // Create Task Composer Plugin Factory
   const std::string share_dir(TESSERACT_TASK_COMPOSER_DIR);
@@ -253,12 +231,8 @@ bool BasicCartesianExample::run()
     profiles->addProfile<TrajOptCompositeProfile>(TRAJOPT_DEFAULT_NAMESPACE, "cartesian_program", composite_profile);
 
     auto plan_profile = std::make_shared<TrajOptDefaultPlanProfile>();
-    plan_profile->cartesian_cost_config.enabled = false;
-    plan_profile->cartesian_constraint_config.enabled = true;
-    plan_profile->cartesian_constraint_config.coeff = Eigen::VectorXd::Ones(6);
-    plan_profile->joint_cost_config.enabled = false;
-    plan_profile->joint_constraint_config.enabled = true;
-    plan_profile->joint_constraint_config.coeff = Eigen::VectorXd::Ones(7);
+    plan_profile->cartesian_coeff = Eigen::VectorXd::Ones(6);
+    plan_profile->joint_coeff = Eigen::VectorXd::Ones(7);
     profiles->addProfile<TrajOptPlanProfile>(TRAJOPT_DEFAULT_NAMESPACE, "RASTER", plan_profile);
     profiles->addProfile<TrajOptPlanProfile>(TRAJOPT_DEFAULT_NAMESPACE, "freespace_profile", plan_profile);
   }
@@ -266,13 +240,11 @@ bool BasicCartesianExample::run()
   // Create task
   const std::string task_name = (ifopt_) ? "TrajOptIfoptPipeline" : "TrajOptPipeline";
   TaskComposerNode::UPtr task = factory.createTaskComposerNode(task_name);
-  const std::string output_key = task->getOutputKeys().get("program");
+  const std::string output_key = task->getOutputKeys().front();
 
-  // Create Task Composer Data Storage
-  auto data = std::make_unique<tesseract_planning::TaskComposerDataStorage>();
-  data->setData("planning_input", program);
-  data->setData("environment", std::shared_ptr<const tesseract_environment::Environment>(env_));
-  data->setData("profiles", profiles);
+  // Create Task Composer Problem
+  auto problem = std::make_unique<PlanningTaskComposerProblem>(env_, profiles);
+  problem->input = program;
 
   if (plotter_ != nullptr && plotter_->isConnected())
     plotter_->waitForInput("Hit Enter to solve for trajectory.");
@@ -280,7 +252,7 @@ bool BasicCartesianExample::run()
   // Solve task
   tesseract_common::Timer stopwatch;
   stopwatch.start();
-  TaskComposerFuture::UPtr future = executor->run(*task, std::move(data));
+  TaskComposerFuture::UPtr future = executor->run(*task, std::move(problem));
   future->wait();
 
   stopwatch.stop();

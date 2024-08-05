@@ -27,93 +27,73 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 #include <boost/serialization/string.hpp>
-
-#include <tesseract_common/serialization.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_task_composer/planning/nodes/upsample_trajectory_task.h>
 #include <tesseract_task_composer/planning/profiles/upsample_trajectory_profile.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 
 #include <tesseract_motion_planners/core/utils.h>
 #include <tesseract_motion_planners/simple/interpolation.h>
 #include <tesseract_motion_planners/planner_utils.h>
 
-#include <tesseract_command_language/composite_instruction.h>
-#include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/poly/state_waypoint_poly.h>
-
 namespace tesseract_planning
 {
-// Requried
-const std::string UpsampleTrajectoryTask::INOUT_PROGRAM_PORT = "program";
-const std::string UpsampleTrajectoryTask::INPUT_PROFILES_PORT = "profiles";
-
-// Optional
-const std::string UpsampleTrajectoryTask::INPUT_COMPOSITE_PROFILE_REMAPPING_PORT = "composite_profile_remapping";
-
-UpsampleTrajectoryTask::UpsampleTrajectoryTask()
-  : TaskComposerTask("UpsampleTrajectoryTask", UpsampleTrajectoryTask::ports(), false)
-{
-}
+UpsampleTrajectoryTask::UpsampleTrajectoryTask() : TaskComposerTask("UpsampleTrajectoryTask", false) {}
 UpsampleTrajectoryTask::UpsampleTrajectoryTask(std::string name,
-                                               std::string input_program_key,
-                                               std::string input_profiles_key,
-                                               std::string output_program_key,
+                                               std::string input_key,
+                                               std::string output_key,
                                                bool conditional)
-  : TaskComposerTask(std::move(name), UpsampleTrajectoryTask::ports(), conditional)
+  : TaskComposerTask(std::move(name), conditional)
 {
-  input_keys_.add(INOUT_PROGRAM_PORT, std::move(input_program_key));
-  input_keys_.add(INPUT_PROFILES_PORT, std::move(input_profiles_key));
-  output_keys_.add(INOUT_PROGRAM_PORT, std::move(output_program_key));
-  validatePorts();
+  input_keys_.push_back(std::move(input_key));
+  output_keys_.push_back(std::move(output_key));
 }
 
 UpsampleTrajectoryTask::UpsampleTrajectoryTask(std::string name,
                                                const YAML::Node& config,
                                                const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), UpsampleTrajectoryTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (input_keys_.empty())
+    throw std::runtime_error("UpsampleTrajectoryTask, config missing 'inputs' entry");
+
+  if (input_keys_.size() > 1)
+    throw std::runtime_error("UpsampleTrajectoryTask, config 'inputs' entry currently only supports one input key");
+
+  if (output_keys_.empty())
+    throw std::runtime_error("UpsampleTrajectoryTask, config missing 'outputs' entry");
+
+  if (output_keys_.size() > 1)
+    throw std::runtime_error("UpsampleTrajectoryTask, config 'outputs' entry currently only supports one output "
+                             "key");
 }
 
-TaskComposerNodePorts UpsampleTrajectoryTask::ports()
+TaskComposerNodeInfo::UPtr UpsampleTrajectoryTask::runImpl(TaskComposerContext& context,
+                                                           OptionalTaskComposerExecutor /*executor*/) const
 {
-  TaskComposerNodePorts ports;
-  ports.input_required[INOUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_PROFILES_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_optional[INPUT_COMPOSITE_PROFILE_REMAPPING_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.output_required[INOUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  return ports;
-}
+  // Get the problem
+  auto& problem = dynamic_cast<PlanningTaskComposerProblem&>(*context.problem);
 
-std::unique_ptr<TaskComposerNodeInfo> UpsampleTrajectoryTask::runImpl(TaskComposerContext& context,
-                                                                      OptionalTaskComposerExecutor /*executor*/) const
-{
   auto info = std::make_unique<TaskComposerNodeInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
 
   // Check that inputs are valid
-  auto input_data_poly = getData(*context.data_storage, INOUT_PROGRAM_PORT);
-  if (input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
+  auto input_data_poly = context.data_storage->getData(input_keys_[0]);
+  if (input_data_poly.isNull() || input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_message = "Input seed to UpsampleTrajectoryTask must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
+    info->message = "Input seed to UpsampleTrajectoryTask must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
 
   // Get Composite Profile
-  auto profiles = getData(*context.data_storage, INPUT_PROFILES_PORT).as<std::shared_ptr<ProfileDictionary>>();
-  auto composite_profile_remapping_poly = getData(*context.data_storage, INPUT_COMPOSITE_PROFILE_REMAPPING_PORT, false);
   const auto& ci = input_data_poly.as<CompositeInstruction>();
   std::string profile = ci.getProfile();
-  profile = getProfileString(ns_, profile, composite_profile_remapping_poly);
-  auto cur_composite_profile =
-      getProfile<UpsampleTrajectoryProfile>(ns_, profile, *profiles, std::make_shared<UpsampleTrajectoryProfile>());
-  cur_composite_profile = applyProfileOverrides(ns_, profile, cur_composite_profile, ci.getProfileOverrides());
+  profile = getProfileString(name_, profile, problem.composite_profile_remapping);
+  auto cur_composite_profile = getProfile<UpsampleTrajectoryProfile>(
+      name_, profile, *problem.profiles, std::make_shared<UpsampleTrajectoryProfile>());
+  cur_composite_profile = applyProfileOverrides(name_, profile, cur_composite_profile, ci.getProfileOverrides());
 
   assert(cur_composite_profile->longest_valid_segment_length > 0);
   InstructionPoly start_instruction;
@@ -121,11 +101,10 @@ std::unique_ptr<TaskComposerNodeInfo> UpsampleTrajectoryTask::runImpl(TaskCompos
   new_results.clear();
 
   upsample(new_results, ci, start_instruction, cur_composite_profile->longest_valid_segment_length);
-  setData(*context.data_storage, INOUT_PROGRAM_PORT, new_results);
+  context.data_storage->setData(output_keys_[0], new_results);
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Successful";
+  info->message = "Successful";
   info->return_value = 1;
   return info;
 }
@@ -210,5 +189,6 @@ void UpsampleTrajectoryTask::serialize(Archive& ar, const unsigned int /*version
 
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::UpsampleTrajectoryTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::UpsampleTrajectoryTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::UpsampleTrajectoryTask)

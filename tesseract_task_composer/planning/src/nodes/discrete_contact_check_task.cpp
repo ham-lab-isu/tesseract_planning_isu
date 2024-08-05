@@ -31,128 +31,75 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/map.hpp>
 #include <boost/serialization/shared_ptr.hpp>
-
-#include <tesseract_common/serialization.h>
-
-#include <tesseract_collision/core/discrete_contact_manager.h>
-#include <tesseract_collision/core/serialization.h>
-
-#include <tesseract_state_solver/state_solver.h>
-
-#include <tesseract_environment/environment.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+//#include <tesseract_process_managers/core/utils.h>
 #include <tesseract_task_composer/planning/nodes/discrete_contact_check_task.h>
 #include <tesseract_task_composer/planning/profiles/contact_check_profile.h>
-
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
-#include <tesseract_task_composer/core/task_composer_data_storage.h>
+#include <tesseract_task_composer/planning/planning_task_composer_problem.h>
 
 #include <tesseract_command_language/composite_instruction.h>
-
 #include <tesseract_motion_planners/core/utils.h>
 #include <tesseract_motion_planners/planner_utils.h>
+#include <tesseract_collision/core/serialization.h>
 
 namespace tesseract_planning
 {
-// Requried
-const std::string DiscreteContactCheckTask::INPUT_PROGRAM_PORT = "program";
-const std::string DiscreteContactCheckTask::INPUT_ENVIRONMENT_PORT = "environment";
-const std::string DiscreteContactCheckTask::INPUT_PROFILES_PORT = "profiles";
+DiscreteContactCheckTask::DiscreteContactCheckTask() : TaskComposerTask("DiscreteContactCheckTask", true) {}
 
-// Optional
-const std::string DiscreteContactCheckTask::INPUT_MANIP_INFO_PORT = "manip_info";
-const std::string DiscreteContactCheckTask::INPUT_COMPOSITE_PROFILE_REMAPPING_PORT = "composite_profile_remapping";
-
-DiscreteContactCheckTask::DiscreteContactCheckTask()
-  : TaskComposerTask("DiscreteContactCheckTask", DiscreteContactCheckTask::ports(), true)
+DiscreteContactCheckTask::DiscreteContactCheckTask(std::string name, std::string input_key, bool is_conditional)
+  : TaskComposerTask(std::move(name), is_conditional)
 {
-}
-
-DiscreteContactCheckTask::DiscreteContactCheckTask(std::string name,
-                                                   std::string input_program_key,
-                                                   std::string input_environment_key,
-                                                   std::string input_profiles_key,
-                                                   bool is_conditional)
-  : TaskComposerTask(std::move(name), DiscreteContactCheckTask::ports(), is_conditional)
-{
-  input_keys_.add(INPUT_PROGRAM_PORT, std::move(input_program_key));
-  input_keys_.add(INPUT_ENVIRONMENT_PORT, std::move(input_environment_key));
-  input_keys_.add(INPUT_PROFILES_PORT, std::move(input_profiles_key));
-  validatePorts();
+  input_keys_.push_back(std::move(input_key));
 }
 
 DiscreteContactCheckTask::DiscreteContactCheckTask(std::string name,
                                                    const YAML::Node& config,
                                                    const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), DiscreteContactCheckTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
+  if (input_keys_.empty())
+    throw std::runtime_error("DiscreteContactCheckTask, config missing 'inputs' entry");
+
+  if (input_keys_.size() > 1)
+    throw std::runtime_error("DiscreteContactCheckTask, config 'inputs' entry currently only supports one input "
+                             "key");
 }
 
-TaskComposerNodePorts DiscreteContactCheckTask::ports()
+TaskComposerNodeInfo::UPtr DiscreteContactCheckTask::runImpl(TaskComposerContext& context,
+                                                             OptionalTaskComposerExecutor /*executor*/) const
 {
-  TaskComposerNodePorts ports;
-  ports.input_required[INPUT_PROGRAM_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_ENVIRONMENT_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INPUT_PROFILES_PORT] = TaskComposerNodePorts::SINGLE;
+  // Get the problem
+  auto& problem = dynamic_cast<PlanningTaskComposerProblem&>(*context.problem);
 
-  ports.input_optional[INPUT_MANIP_INFO_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_optional[INPUT_COMPOSITE_PROFILE_REMAPPING_PORT] = TaskComposerNodePorts::SINGLE;
-  return ports;
-}
-
-std::unique_ptr<TaskComposerNodeInfo> DiscreteContactCheckTask::runImpl(TaskComposerContext& context,
-                                                                        OptionalTaskComposerExecutor /*executor*/) const
-{
   auto info = std::make_unique<DiscreteContactCheckTaskInfo>(*this);
   info->return_value = 0;
-  info->status_code = 0;
+  info->env = problem.env;
 
   // --------------------
   // Check that inputs are valid
   // --------------------
-  auto env_poly = getData(*context.data_storage, INPUT_ENVIRONMENT_PORT);
-  if (env_poly.getType() != std::type_index(typeid(std::shared_ptr<const tesseract_environment::Environment>)))
+  auto input_data_poly = context.data_storage->getData(input_keys_[0]);
+  if (input_data_poly.isNull() || input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
   {
-    info->status_code = 0;
-    info->status_message = "Input data '" + input_keys_.get(INPUT_ENVIRONMENT_PORT) + "' is not correct type";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
-    info->return_value = 0;
+    info->message = "Input to DiscreteContactCheckTask must be a composite instruction";
+    CONSOLE_BRIDGE_logError("%s", info->message.c_str());
     return info;
   }
-
-  auto env = env_poly.as<std::shared_ptr<const tesseract_environment::Environment>>();
-  info->env = env;
-
-  auto input_data_poly = getData(*context.data_storage, INPUT_PROGRAM_PORT);
-  if (input_data_poly.getType() != std::type_index(typeid(CompositeInstruction)))
-  {
-    info->status_message = "Input to DiscreteContactCheckTask must be a composite instruction";
-    CONSOLE_BRIDGE_logError("%s", info->status_message.c_str());
-    return info;
-  }
-
-  tesseract_common::ManipulatorInfo input_manip_info;
-  auto manip_info_poly = getData(*context.data_storage, INPUT_MANIP_INFO_PORT, false);
-  if (!manip_info_poly.isNull())
-    input_manip_info = manip_info_poly.as<tesseract_common::ManipulatorInfo>();
 
   // Get Composite Profile
-  auto profiles = getData(*context.data_storage, INPUT_PROFILES_PORT).as<std::shared_ptr<ProfileDictionary>>();
-  auto composite_profile_remapping_poly = getData(*context.data_storage, INPUT_COMPOSITE_PROFILE_REMAPPING_PORT, false);
   const auto& ci = input_data_poly.as<CompositeInstruction>();
   std::string profile = ci.getProfile();
-  profile = getProfileString(ns_, profile, composite_profile_remapping_poly);
+  profile = getProfileString(name_, profile, problem.composite_profile_remapping);
   auto cur_composite_profile =
-      getProfile<ContactCheckProfile>(ns_, profile, *profiles, std::make_shared<ContactCheckProfile>());
-  cur_composite_profile = applyProfileOverrides(ns_, profile, cur_composite_profile, ci.getProfileOverrides());
+      getProfile<ContactCheckProfile>(name_, profile, *problem.profiles, std::make_shared<ContactCheckProfile>());
+  cur_composite_profile = applyProfileOverrides(name_, profile, cur_composite_profile, ci.getProfileOverrides());
 
   // Get state solver
-  tesseract_common::ManipulatorInfo manip_info = ci.getManipulatorInfo().getCombined(input_manip_info);
-  tesseract_kinematics::JointGroup::UPtr manip = env->getJointGroup(manip_info.manipulator);
-  tesseract_scene_graph::StateSolver::UPtr state_solver = env->getStateSolver();
-  tesseract_collision::DiscreteContactManager::Ptr manager = env->getDiscreteContactManager();
+  tesseract_common::ManipulatorInfo manip_info = ci.getManipulatorInfo().getCombined(problem.manip_info);
+  tesseract_kinematics::JointGroup::UPtr manip = problem.env->getJointGroup(manip_info.manipulator);
+  tesseract_scene_graph::StateSolver::UPtr state_solver = problem.env->getStateSolver();
+  tesseract_collision::DiscreteContactManager::Ptr manager = problem.env->getDiscreteContactManager();
 
   manager->setActiveCollisionObjects(manip->getActiveLinkNames());
   manager->applyContactManagerConfig(cur_composite_profile->config.contact_manager_config);
@@ -160,8 +107,8 @@ std::unique_ptr<TaskComposerNodeInfo> DiscreteContactCheckTask::runImpl(TaskComp
   std::vector<tesseract_collision::ContactResultMap> contacts;
   if (contactCheckProgram(contacts, *manager, *state_solver, ci, cur_composite_profile->config))
   {
-    info->status_message = "Results are not contact free for process input: " + ci.getDescription();
-    CONSOLE_BRIDGE_logInform("%s", info->status_message.c_str());
+    info->message = "Results are not contact free for process input: " + ci.getDescription();
+    CONSOLE_BRIDGE_logInform("%s", info->message.c_str());
 
     // Save space
     for (auto& contact_map : contacts)
@@ -172,10 +119,9 @@ std::unique_ptr<TaskComposerNodeInfo> DiscreteContactCheckTask::runImpl(TaskComp
   }
 
   info->color = "green";
-  info->status_code = 1;
-  info->status_message = "Discrete contact check succeeded";
+  info->message = "Discrete contact check succeeded";
   info->return_value = 1;
-  CONSOLE_BRIDGE_logDebug("%s", info->status_message.c_str());
+  CONSOLE_BRIDGE_logDebug("%s", info->message.c_str());
   return info;
 }
 
@@ -191,12 +137,12 @@ void DiscreteContactCheckTask::serialize(Archive& ar, const unsigned int /*versi
   ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(TaskComposerTask);
 }
 
-DiscreteContactCheckTaskInfo::DiscreteContactCheckTaskInfo(const TaskComposerNodeInfo& task)
+DiscreteContactCheckTaskInfo::DiscreteContactCheckTaskInfo(const DiscreteContactCheckTask& task)
   : TaskComposerNodeInfo(task)
 {
 }
 
-std::unique_ptr<TaskComposerNodeInfo> DiscreteContactCheckTaskInfo::clone() const
+TaskComposerNodeInfo::UPtr DiscreteContactCheckTaskInfo::clone() const
 {
   return std::make_unique<DiscreteContactCheckTaskInfo>(*this);
 }
@@ -223,7 +169,8 @@ void DiscreteContactCheckTaskInfo::serialize(Archive& ar, const unsigned int /*v
 }
 }  // namespace tesseract_planning
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DiscreteContactCheckTask)
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DiscreteContactCheckTaskInfo)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::DiscreteContactCheckTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DiscreteContactCheckTask)
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::DiscreteContactCheckTaskInfo)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::DiscreteContactCheckTaskInfo)

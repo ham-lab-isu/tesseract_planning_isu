@@ -55,7 +55,7 @@ bool isWithinJointLimits(const Eigen::Ref<const Eigen::Matrix<FloatType, Eigen::
                          const Eigen::Matrix<FloatType, Eigen::Dynamic, 2>& limits,
                          const Eigen::Vector2d& coupling_limits)
 {
-  if (tesseract_common::isWithinLimits<FloatType>(joint_values, limits))
+  if (tesseract_common::isWithinPositionLimits<FloatType>(joint_values, limits))
   {
     if (((joint_values(joint_values.size() - 3) + joint_values(joint_values.size() - 1)) < coupling_limits(0)) ||
         ((joint_values(joint_values.size() - 3) + joint_values(joint_values.size() - 1)) > coupling_limits(1)))
@@ -81,7 +81,7 @@ bool isValidState(const tesseract_kinematics::ForwardKinematics::ConstPtr& robot
                   const Eigen::Ref<const Eigen::Matrix<FloatType, Eigen::Dynamic, 1>>& joint_values,
                   const Eigen::Matrix<FloatType, Eigen::Dynamic, 2>& limits)
 {
-  if (!tesseract_common::isWithinLimits(joint_values, limits))
+  if (!tesseract_common::isWithinPositionLimits(joint_values, limits))
     return false;
 
   Eigen::Vector2i sign_correction = Eigen::Vector2i::Ones();
@@ -102,18 +102,14 @@ bool isValidState(const tesseract_kinematics::ForwardKinematics::ConstPtr& robot
  */
 inline std::string getProfileString(const std::string& ns,
                                     const std::string& profile,
-                                    const tesseract_common::AnyPoly& profile_remapping_poly,
+                                    const PlannerProfileRemapping& profile_remapping,
                                     std::string default_profile = DEFAULT_PROFILE_KEY)
 {
   std::string results = profile;
   if (profile.empty())
     results = std::move(default_profile);
 
-  if (profile_remapping_poly.isNull())
-    return results;
-
   // Check for remapping of profile
-  const auto& profile_remapping = profile_remapping_poly.as<ProfileRemapping>();
   auto remap = profile_remapping.find(ns);
   if (remap != profile_remapping.end())
   {

@@ -36,8 +36,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <shared_mutex>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_common/any_poly.h>
-
 namespace tesseract_planning
 {
 /**
@@ -218,20 +216,16 @@ public:
   }
 
   /** @brief Clear the dictionary */
-  void clear();
+  void clear()
+  {
+    std::unique_lock lock(mutex_);
+    profiles_.clear();
+  }
 
 protected:
   std::unordered_map<std::string, std::unordered_map<std::type_index, std::any>> profiles_;
   mutable std::shared_mutex mutex_;
-
-  friend class boost::serialization::access;
-  template <class Archive>
-  void serialize(Archive& ar, const unsigned int version);  // NOLINT
 };
 }  // namespace tesseract_planning
-
-BOOST_CLASS_EXPORT_KEY(tesseract_planning::ProfileDictionary)
-TESSERACT_ANY_EXPORT_KEY(std::shared_ptr<tesseract_planning::ProfileDictionary>,
-                         TesseractPlanningProfileDictionarySharedPtr)
 
 #endif  // TESSERACT_MOTION_PLANNERS_PROFILE_DICTIONARY_H

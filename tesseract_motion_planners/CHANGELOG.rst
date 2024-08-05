@@ -2,56 +2,6 @@
 Changelog for package tesseract_motion_planners
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.23.5 (2024-08-01)
--------------------
-
-0.23.4 (2024-07-29)
--------------------
-
-0.23.3 (2024-07-28)
--------------------
-
-0.23.2 (2024-07-25)
--------------------
-
-0.23.1 (2024-07-24)
--------------------
-
-0.23.0 (2024-07-24)
--------------------
-* Remove TaskComposerProblem and leverage TaskComposerDataStorage instead (`#469 <https://github.com/tesseract-robotics/tesseract_planning/issues/469>`_)
-* Fixes for building on Ubuntu Noble
-* Contributors: Levi Armstrong, Roelof Oomen
-
-0.22.1 (2024-06-12)
--------------------
-
-0.22.0 (2024-06-10)
--------------------
-* More compact descartes collision logging output (`#460 <https://github.com/tesseract-robotics/tesseract_planning/issues/460>`_)
-* Better debugging feedback on failed Descartes plan (`#401 <https://github.com/tesseract-robotics/tesseract_planning/issues/401>`_)
-  Co-authored-by: Levi Armstrong <levi.armstrong@gmail.com>
-* Add convex_solver_settings to TrajOptIfoptDefaultSolverProfile (`#425 <https://github.com/tesseract-robotics/tesseract_planning/issues/425>`_)
-  Co-authored-by: Levi Armstrong <levi.armstrong@gmail.com>
-* Fix descartes planner check if the graph built
-* Add time parameterization interface (`#455 <https://github.com/tesseract-robotics/tesseract_planning/issues/455>`_)
-* Update to use forward declarations (`#449 <https://github.com/tesseract-robotics/tesseract_planning/issues/449>`_)
-* Add toleranced waypoints to TrajOpt Solver (`#403 <https://github.com/tesseract-robotics/tesseract_planning/issues/403>`_)
-* Update trajopt ifopt to support dynamic cartesian waypoints
-* Fixed issue checking wrong size for contact check results
-* Feat/more verbose planning failures (`#440 <https://github.com/tesseract-robotics/tesseract_planning/issues/440>`_)
-* Contributors: Levi Armstrong, Roelof Oomen, Tyler Marr
-
-0.21.7 (2024-02-03)
--------------------
-* Fix simple planner enforcing limits on cartesian waypoints that do not have a seed
-* Contributors: Levi Armstrong
-
-0.21.6 (2023-12-21)
--------------------
-* Add Mac OSX support (`#428 <https://github.com/tesseract-robotics/tesseract_planning/issues/428>`_)
-* Contributors: John Wason
-
 0.21.5 (2023-12-13)
 -------------------
 

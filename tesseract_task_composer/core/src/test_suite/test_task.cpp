@@ -23,36 +23,15 @@
  * limitations under the License.
  */
 
-#include <tesseract_common/macros.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <console_bridge/console.h>
-#include <boost/serialization/string.hpp>
-#include <yaml-cpp/yaml.h>
-#include <tesseract_common/serialization.h>
-TESSERACT_COMMON_IGNORE_WARNINGS_POP
-
 #include <tesseract_task_composer/core/test_suite/test_task.h>
-#include <tesseract_task_composer/core/task_composer_context.h>
-#include <tesseract_task_composer/core/task_composer_node_info.h>
+#include <tesseract_task_composer/core/task_composer_plugin_factory.h>
 
 namespace tesseract_planning::test_suite
 {
-std::unique_ptr<TaskComposerNodeInfo> DummyTaskComposerNode::runImpl(TaskComposerContext& /*context*/,
-                                                                     OptionalTaskComposerExecutor /*executor*/) const
-{
-  return std::make_unique<TaskComposerNodeInfo>(*this);
-}
-
-const std::string TestTask::INOUT_PORT1_PORT = "port1";
-const std::string TestTask::INOUT_PORT2_PORT = "port2";
-
-TestTask::TestTask() : TaskComposerTask("TestTask", TestTask::ports(), true) {}
-TestTask::TestTask(std::string name, bool is_conditional)
-  : TaskComposerTask(std::move(name), TestTask::ports(), is_conditional)
-{
-}
+TestTask::TestTask() : TaskComposerTask("TestTask", true) {}
+TestTask::TestTask(std::string name, bool is_conditional) : TaskComposerTask(std::move(name), is_conditional) {}
 TestTask::TestTask(std::string name, const YAML::Node& config, const TaskComposerPluginFactory& /*plugin_factory*/)
-  : TaskComposerTask(std::move(name), TestTask::ports(), config)
+  : TaskComposerTask(std::move(name), config)
 {
   // LCOV_EXCL_START
   try
@@ -71,16 +50,6 @@ TestTask::TestTask(std::string name, const YAML::Node& config, const TaskCompose
     throw std::runtime_error("TestTask: Failed to parse yaml config data! Details: " + std::string(e.what()));
   }
   // LCOV_EXCL_STOP
-}
-
-TaskComposerNodePorts TestTask::ports()
-{
-  TaskComposerNodePorts ports;
-  ports.input_required[INOUT_PORT1_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.input_required[INOUT_PORT2_PORT] = TaskComposerNodePorts::MULTIPLE;
-  ports.output_required[INOUT_PORT1_PORT] = TaskComposerNodePorts::SINGLE;
-  ports.output_required[INOUT_PORT2_PORT] = TaskComposerNodePorts::MULTIPLE;
-  return ports;
 }
 
 bool TestTask::operator==(const TestTask& rhs) const
@@ -103,8 +72,8 @@ void TestTask::serialize(Archive& ar, const unsigned int /*version*/)
   ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(TaskComposerTask);
 }
 
-std::unique_ptr<TaskComposerNodeInfo> TestTask::runImpl(TaskComposerContext& context,
-                                                        OptionalTaskComposerExecutor /*executor*/) const
+TaskComposerNodeInfo::UPtr TestTask::runImpl(TaskComposerContext& context,
+                                             OptionalTaskComposerExecutor /*executor*/) const
 {
   if (throw_exception)
     throw std::runtime_error("TestTask, failure");
@@ -115,7 +84,6 @@ std::unique_ptr<TaskComposerNodeInfo> TestTask::runImpl(TaskComposerContext& con
   else
     node_info->color = "green";
   node_info->return_value = return_value;
-  node_info->status_code = return_value;
 
   if (set_abort)
   {
@@ -128,5 +96,6 @@ std::unique_ptr<TaskComposerNodeInfo> TestTask::runImpl(TaskComposerContext& con
 
 }  // namespace tesseract_planning::test_suite
 
-BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::test_suite::TestTask)
+#include <tesseract_common/serialization.h>
 TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_planning::test_suite::TestTask)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_planning::test_suite::TestTask)

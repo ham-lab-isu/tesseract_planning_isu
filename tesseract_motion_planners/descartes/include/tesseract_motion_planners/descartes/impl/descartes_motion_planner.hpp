@@ -29,23 +29,26 @@
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <descartes_light/solvers/ladder_graph/ladder_graph_solver.h>
-#include <console_bridge/console.h>
+#include <descartes_light/samplers/fixed_joint_waypoint_sampler.h>
+#include <vector>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_common/kinematic_limits.h>
-#include <tesseract_kinematics/core/kinematic_group.h>
+#include <tesseract_collision/core/discrete_contact_manager.h>
+#include <tesseract_collision/core/continuous_contact_manager.h>
+
 #include <tesseract_environment/environment.h>
-#include <tesseract_command_language/poly/move_instruction_poly.h>
-#include <tesseract_command_language/utils.h>
+#include <tesseract_environment/utils.h>
 
 #include <tesseract_motion_planners/descartes/descartes_motion_planner.h>
 #include <tesseract_motion_planners/descartes/profile/descartes_default_plan_profile.h>
-#include <tesseract_motion_planners/core/types.h>
+#include <tesseract_motion_planners/core/utils.h>
 #include <tesseract_motion_planners/simple/interpolation.h>
 #include <tesseract_motion_planners/planner_utils.h>
 
+#include <tesseract_command_language/utils.h>
+
 constexpr auto SOLUTION_FOUND{ "Found valid solution" };
-constexpr auto ERROR_INVALID_INPUT{ "Failed invalid input: " };
+constexpr auto ERROR_INVALID_INPUT{ "Failed invalid input" };
 constexpr auto ERROR_FAILED_TO_BUILD_GRAPH{ "Failed to build graph" };
 constexpr auto ERROR_FAILED_TO_FIND_VALID_SOLUTION{ "Failed to find valid solution" };
 
@@ -86,16 +89,7 @@ PlannerResponse DescartesMotionPlanner<FloatType>::solve(const PlannerRequest& r
   try
   {
     descartes_light::LadderGraphSolver<FloatType> solver(problem->num_threads);
-
-    // Build Graph
-    if (!solver.build(problem->samplers, problem->edge_evaluators, problem->state_evaluators))
-    {
-      response.successful = false;
-      response.message = ERROR_FAILED_TO_BUILD_GRAPH;
-      return response;
-    }
-
-    // Search Graph
+    solver.build(problem->samplers, problem->edge_evaluators, problem->state_evaluators);
     descartes_result = solver.search();
     if (descartes_result.trajectory.empty())
     {
@@ -134,8 +128,8 @@ PlannerResponse DescartesMotionPlanner<FloatType>::solve(const PlannerRequest& r
   for (const auto& js : descartes_result.trajectory)
   {
     solution.push_back(js->values.template cast<double>());
-    assert(tesseract_common::satisfiesLimits<double>(solution.back(), joint_limits));
-    tesseract_common::enforceLimits<double>(solution.back(), joint_limits);
+    assert(tesseract_common::satisfiesPositionLimits<double>(solution.back(), joint_limits));
+    tesseract_common::enforcePositionLimits<double>(solution.back(), joint_limits);
   }
 
   // Flatten the results to make them easier to process
@@ -217,9 +211,9 @@ void DescartesMotionPlanner<FloatType>::clear()
 }
 
 template <typename FloatType>
-std::unique_ptr<MotionPlanner> DescartesMotionPlanner<FloatType>::clone() const
+MotionPlanner::Ptr DescartesMotionPlanner<FloatType>::clone() const
 {
-  return std::make_unique<DescartesMotionPlanner<FloatType>>(name_);
+  return std::make_shared<DescartesMotionPlanner<FloatType>>(name_);
 }
 
 template <typename FloatType>
